@@ -1,0 +1,12 @@
+// Never got to try this, went another way with determining colors. But I love this idea...
+
+get_luminescence(clr) => 
+    r = color.r(clr)/255
+    g = color.g(clr)/255
+    b = color.b(clr)/255
+    luminescence = (r+r+b+g+g+g)/6
+    luminescence
+
+get_color_pairing(clr, light_color, dark_color) =>
+    l = get_luminescence(clr)
+    pair_clr = l > 0.5 ? light_color : dark_color
