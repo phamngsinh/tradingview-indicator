@@ -1,0 +1,47 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © jmosullivan
+// @version=5
+// Created By jmosullivan
+// Stairstep
+
+indicator(title='Stairstep', shorttitle="SS", overlay=true)
+import jmosullivan/Utilities/8
+
+min_candles = input.int(5, 'Minimum Consecutive Candles', 3, 10, 1, tooltip="The minimum number of consecutive candles that represent a stairstep pattern.")
+txtsize = input.string(defval=size.small, title="Text Size",  options=[size.tiny, size.small, size.normal])
+txtlen = input.string(defval="Words", title="Label Text", options=["Words", "Abbreviations"], tooltip="Show full words (Stairstep, Inside Bar) on the label, or abbreviations (SS, IB)")
+show_numbers = input.bool(defval=true, title="Show # of Stairsteps")
+clr_lbl_ss = input.color(color.rgb(232, 24, 170), 'Label', inline="1")
+clr_txt_ss = input.color(color.white, 'Text', inline="1")
+clr_txt_ib = input.color(color.yellow, 'IB Text', 'Colors of the label/text when stairstepping', inline="1")
+clr_lbl_br = input.color(color.rgb(1, 95, 35), 'Break Label', inline="2")
+clr_txt_br = input.color(color.rgb(96, 245, 0), 'Text', 'Colors of the label/text when stairstep breaks', inline="2")
+
+doLabel(direction, len) =>
+    if (barstate.islast)
+        ss = Utilities.getStairstep(direction, len)
+        ss_break = ss == -1
+        yloc = ss_break ? direction == 'Down' ? high[1] : low[1] : close
+        // is_ib = high <= high[1] and low >= low[1]
+        ib_count = Utilities.getInsideBarCount()
+        txt_ss = txtlen == "Words" ? "Stairstep" : "SS"
+        txt_ib = txtlen == "Words" ? "x Inside Bar" : "xIB"
+        txt_dn = txtlen == "Words" ? "Down" : "▼"
+        txt_up = txtlen == "Words" ? "Up" : "▲"
+        txt = txt_ss + ' ' + (direction == "Up" ? txt_up : txt_dn) + (ss_break ? ' Break' : '')
+        if (show_numbers and ss_break == false)
+            txt := str.tostring(ss) + " " + txt
+        if (ib_count > 0)
+            txt := txt + ', ' + str.tostring(ib_count) + txt_ib
+        clr = ss == -1 ? clr_lbl_br : clr_lbl_ss
+        txt_clr = ss == -1 ? clr_txt_br : ib_count > 0 ? clr_txt_ib : clr_txt_ss
+        l = label.new(x=bar_index[0]+1, y=yloc, text=txt, style=label.style_label_left, color=clr, textcolor=txt_clr, size=txtsize)
+        // Delete older labels (only have the latest one on the last candle)
+        label.delete(l[1])
+
+        // Delete the current one if there's no stairstep and no break
+        if (ss == 0)
+            label.delete(l[0])
+
+doLabel('Down', min_candles)
+doLabel('Up', min_candles)
