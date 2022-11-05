@@ -1,0 +1,122 @@
+//@version=5
+indicator('Nav Pivot Zones', 'Nav Zones', overlay= true, max_boxes_count= 500, max_labels_count= 500, max_lines_count=500)
+
+// Note: I found most of this code in "BJ Key Levels" indicator, which was a crazy indicator linked to some nutso libraries. 
+
+// Variables 
+
+lookLeft = 20
+lookRight = 15
+numPivots = 4
+zoneWidth = 0.5
+maxZonePercent = 5
+color bullCol = #1eb42f
+color bearCol = #ff73d7
+bgTransp = 95
+bordTransp = 60
+
+// Constants
+
+var pivotHigh = array.new_box(numPivots)
+var pivotLows = array.new_box(numPivots)  
+var highBull = array.new_bool(numPivots)
+var lowsBull = array.new_bool(numPivots)
+var bullBorder = color.new(bullCol, bordTransp)
+var bullBgCol = color.new(bullCol, bgTransp)
+var bearBorder = color.new(bearCol, bordTransp)
+var bearBgCol = color.new(bearCol, bgTransp)
+
+// Functions
+
+heikinAshiBody() =>
+    heikinAshiClose = (open + high  +  low  + close) / 4
+    heikinAshiOpen = float(na)
+    heikinAshiOpen := na(heikinAshiOpen[1]) ? (open + close) / 2 : (nz(heikinAshiOpen[1]) + nz(heikinAshiClose[1])) / 2    
+    [heikinAshiOpen, heikinAshiClose]
+    
+_extend(_x) =>
+    for i = 0 to array.size(_x) - 1
+        box.set_right(array.get(_x, i), bar_index)
+        
+_arrayLoad(_x, _max, _val) =>  
+    array.unshift(_x, _val)   
+    if  array.size(_x) > _max
+        array.pop(_x)
+
+_arrayBox(_x, _max, _val) =>  
+    array.unshift(_x,   _val)   
+    if       array.size(_x) > _max
+        _b = array.pop(_x)
+
+_box(_x1, _t, _r, _b, _boCol, _bgCol, _e) =>
+    box.new(_x1, _t, _r, _b, xloc=xloc.bar_index, extend=_e, border_color=_boCol, bgcolor=_bgCol) 
+
+_getBox(_x,_i) =>
+    _box = array.get(_x,_i)
+    _t = box.get_top(_box)
+    _b = box.get_bottom(_box)
+    [_t, _b]
+    
+_align(_x,_y) =>
+    for i = 0 to array.size(_x) - 1
+        [_T, _B] = _getBox(_y, 0)
+        [_t, _b] = _getBox(_x, i)
+        if _T > _b and _T < _t or 
+           _B < _t and _B > _b or 
+           _T > _t and _B < _b or 
+           _B > _b and _T < _t
+            box.set_top(array.get(_y, 0), _t)
+            box.set_bottom(array.get(_y, 0), _b)
+ 
+_color(_x, _y) =>
+    var int _track = numPivots
+    for i = 0 to array.size(_x) - 1
+        [t_, b_] = _getBox(_x, i)
+        _isBull = array.get(_y, i)
+        if close > t_ and not _isBull
+            box.set_extend(array.get(_x, i), extend.none)
+            array.set(_x, i, _box(bar_index, t_, bar_index, b_, bullBorder, bullBgCol, extend.none))
+            array.set(_y, i, true)
+            _track += 1
+        if close < b_ and _isBull
+            box.set_extend(array.get(_x, i), extend.none)
+            array.set(_x, i, _box(bar_index, t_, bar_index, b_, bearBorder, bearBgCol, extend.none))
+            array.set(_y, i, false)
+            _track -= 1
+    _track
+
+// Variable Calculations
+
+atr = ta.atr(30)
+[heikinAshiOpen, heikinAshiClose] = heikinAshiBody()
+srcHigh = math.max(heikinAshiClose, heikinAshiOpen)
+srcLow = math.min(heikinAshiClose, heikinAshiOpen)
+pivot_high = ta.pivothigh(srcHigh, lookLeft, lookRight)
+pivot_low = ta.pivotlow(srcLow, lookLeft, lookRight)
+perc = close * (maxZonePercent / 100)
+band = math.min(atr * zoneWidth, perc)[lookRight] / 2
+HH = pivot_high + band
+HL = pivot_high - band
+LH = pivot_low + band
+LL = pivot_low - band
+
+// Logic
+
+if pivot_high and  barstate.isconfirmed
+    _arrayLoad(highBull , numPivots,   false)      
+    _arrayBox(pivotHigh, numPivots,   _box(bar_index[lookRight], HH, bar_index, HL, bearBorder, bearBgCol, extend.none))
+
+if pivot_low and   barstate.isconfirmed
+    _arrayLoad(lowsBull , numPivots,   true)      
+    _arrayBox(pivotLows, numPivots,   _box(bar_index[lookRight], LH, bar_index, LL, bullBorder, bullBgCol, extend.none))
+
+_align(pivotHigh, pivotHigh)
+_align(pivotHigh, pivotLows)    
+_align(pivotLows, pivotLows)
+_align(pivotLows, pivotHigh)
+
+_extend(pivotHigh)
+_extend(pivotLows)
+
+trackHigh = _color(pivotHigh, highBull)
+trackLows = _color(pivotLows, lowsBull)
