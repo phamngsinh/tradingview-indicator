@@ -1,0 +1,30 @@
+//@version=5
+indicator(shorttitle="MACD BS", title="MACD Crossover Buy & Sell Signal", overlay=true)
+
+show_200 = input.bool(false, 'Show 200 EMA')
+
+// This indicator works by giving long and short signals based on macd crossover:
+// If MACD has a bullish crossover from below the zero line, and we are above the 200ema (we are in an uptrend), that's a long signal
+// If MACD has a bearish crossover from above the zero line, and we are below the 200ema (we are in a downtrend), that's a short signal
+ema_200 = ta.ema(close, 200)
+fast_ma = ta.ema(close, 12)
+slow_ma = ta.ema(close, 26)
+macd = fast_ma - slow_ma
+signal = ta.ema(macd, 9)
+
+// conditions for signals
+bearSignal = close < ema_200 and macd > 0 and macd[1] > signal[1] and macd < signal
+bullSignal = close > ema_200 and macd < 0 and macd[1] < signal[1] and macd > signal
+
+//Plots
+if (show_200 == false)
+    ema_200 := 0
+    
+plot(ema_200, color=color.red)
+plotshape(bearSignal, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.tiny)
+plotshape(bullSignal, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.tiny)
+
+// Alert Functionality
+alertcondition(bearSignal or bullSignal, title="Strong Crossover Signal", message="{{exchange}}:{{ticker}}" + " {{interval}}" + " MACD Crossover Strong Buy/Sell Signal")
+alertcondition(bearSignal, title="Bearish Signal", message="{{exchange}}:{{ticker}}" + " {{interval}}" + " Bearish MACD Crossover Strong Sell Signal")
+alertcondition(bullSignal, title="Bullish Signal", message="{{exchange}}:{{ticker}}" + " {{interval}}" + " Bullish MACD Crossover Strong Buy Signal")
