@@ -1,0 +1,348 @@
+//@version=5
+indicator("Nav Key Levels", shorttitle="Nav Levels", overlay=true)
+
+import jmosullivan/Utilities/13
+import jmosullivan/PrivateTable/7
+
+// General Settings
+grpGeneral = "General Settings"
+// labelStyle = input.string("Left", "Label Style", ["Center", "Left", "Lower Left", "Lower Right", "Right", "Up", "Upper Left", "Upper Right", "Plain Text", "No Labels"], "Where should the label be positioned?", group=grpGeneral)
+lblTextSize = input.string(defval=size.small, title="Label Text Size", options=[size.auto, size.tiny, size.small, size.normal, size.large, size.huge], group=grpGeneral)
+labelOffset = input.int(5, "Label Offset", 1, 100, 1, group=grpGeneral, tooltip="The amount to push the labels to the right of the last candle.")
+autoThicken = input.bool(true, "Thicken lines when they stack up at levels", tooltip="When more than one level meets at a price, the labels will combine themselves for readability. When labels combine, if this option is enabled, the line thickness will increase by 1 for every level that gets stacked up (to a max thickness of 4).", group=grpGeneral)
+showPrice = input.bool(true, "Show price on the labels", tooltip="Include the price of the key level in the label before the text.", group=grpGeneral)
+
+grpInsidebars = "Inside Bar Settings"
+lineTooltip = "Text color, line color, style and width."
+insidebarText = input.string(" (#x Inside Bar)", "Inside Bar Label", tooltip="If the level is on an inside bar, this text will be added to the label indicating how many inside bars there are. The # character will be replaced with the number of inside bars. For example: '3x Inside Bar' if the level marks the third inside bar. ", group=grpInsidebars)
+insidebarTextColor = input.color(color.white, "Appearance", group=grpInsidebars, inline="0")
+insidebarColor = input.color(color.rgb(232, 24, 170), "", group=grpInsidebars, inline="0")
+insidebarStyle = input.string("Solid", "", ["Solid", "Dashed", "Dotted", "None/Hidden"], group=grpInsidebars, inline="0")
+insidebarWidth = input.int(2, "", options=[1, 2, 3, 4], group=grpInsidebars, inline="0", tooltip=lineTooltip)
+
+// Timeframe Specific Settings
+defaultTransparency = 20
+
+grpPremarket = "Premarket Highs & Lows"
+inline1 = "1"
+splitTooltip = "Customize the text on the labels. This value will be split on the '/' slash character. The first value will be the 'high' string, and the latter will be the 'low' string."
+premarketText = input.string("Premarket High/Premarket Low", "High/Low Label", group=grpPremarket, tooltip=splitTooltip)
+premarketTextColor = input.color(color.white, "Appearance", group=grpPremarket, inline=inline1)
+premarketColor = input.color(color.new(color.orange, defaultTransparency), "", group=grpPremarket, inline=inline1)
+premarketStyle = input.string("Solid", "", ["Solid", "Dashed", "Dotted", "None/Hidden"], group=grpPremarket, inline=inline1)
+premarketWidth = input.int(1, "", options=[1, 2, 3, 4], group=grpPremarket, inline=inline1, tooltip=lineTooltip)
+
+grpPrevHour = "Previous Hour Highs & Lows"
+inline2 = "2"
+prevHourText = input.string("Prev Hour High/Prev Hour Low", "High/Low Label", group=grpPrevHour, tooltip=splitTooltip)
+prevHourTextColor = input.color(color.white, "Appearance", group=grpPrevHour, inline=inline2)
+prevHourColor = input.color(color.new(color.blue, defaultTransparency), "", group=grpPrevHour, inline=inline2)
+prevHourStyle = input.string("Solid", "", ["Solid", "Dashed", "Dotted", "None/Hidden"], group=grpPrevHour, inline=inline2)
+prevHourWidth = input.int(1, "", options=[1, 2, 3, 4], group=grpPrevHour, inline=inline2, tooltip=lineTooltip)
+
+grpToday = "Today Highs & Lows"
+inline3 = "3"
+todayText = input.string("Day High/Day Low", "High/Low Label", group=grpToday, tooltip=splitTooltip)
+todayTextColor = input.color(color.white, "Appearance", group=grpToday, inline=inline3)
+todayColor = input.color(color.new(color.navy, defaultTransparency), "", group=grpToday, inline=inline3)
+todayStyle = input.string("Solid", "", ["Solid", "Dashed", "Dotted", "None/Hidden"], group=grpToday, inline=inline3)
+todayWidth = input.int(1, "", options=[1, 2, 3, 4], group=grpToday, inline=inline3, tooltip=lineTooltip)
+
+grpAfterHours = "After Hours Highs & Lows"
+inline4 = "4"
+afterHoursText = input.string("After Hours High/After Hours Low", "High/Low Label", group=grpAfterHours, tooltip=splitTooltip)
+afterHoursTextColor = input.color(color.white, "Appearance", group=grpAfterHours, inline=inline1)
+afterHoursColor = input.color(color.new(color.gray, defaultTransparency), "", group=grpAfterHours, inline=inline1)
+afterHoursStyle = input.string("Solid", "", ["Solid", "Dashed", "Dotted", "None/Hidden"], group=grpAfterHours, inline=inline1)
+afterHoursWidth = input.int(1, "", options=[1, 2, 3, 4], group=grpAfterHours, inline=inline1, tooltip=lineTooltip)
+
+grpPrevDay = "Previous Day Highs & Lows"
+inline5 = "5"
+prevDayText = input.string("Yesterday High/Yesterday Low", "High/Low Label", group=grpPrevDay, tooltip=splitTooltip)
+prevDayTextColor = input.color(color.white, "Appearance", group=grpPrevDay, inline=inline5)
+prevDayColor = input.color(color.new(color.purple, defaultTransparency), "", group=grpPrevDay, inline=inline5)
+prevDayStyle = input.string("Solid", "", ["Solid", "Dashed", "Dotted", "None/Hidden"], group=grpPrevDay, inline=inline5)
+prevDayWidth = input.int(1, "", options=[1, 2, 3, 4], group=grpPrevDay, inline=inline5, tooltip=lineTooltip)
+
+grpPrevWeek = "Previous Week Highs & Lows"
+inline6 = "6"
+prevWeekText = input.string("Prev Week High/Prev Week Low", "High/Low Label", group=grpPrevWeek, tooltip=splitTooltip)
+prevWeekTextColor = input.color(color.white, "Appearance", group=grpPrevWeek, inline=inline6)
+prevWeekColor = input.color(color.new(color.teal, defaultTransparency), "", group=grpPrevWeek, inline=inline6)
+prevWeekStyle = input.string("Solid", "", ["Solid", "Dashed", "Dotted", "None/Hidden"], group=grpPrevWeek, inline=inline6)
+prevWeekWidth = input.int(1, "", options=[1, 2, 3, 4], group=grpPrevWeek, inline=inline6, tooltip=lineTooltip)
+
+grpPrevMonth = "Previous Month Highs & Lows"
+inline7 = "7"
+prevMonthText = input.string("Prev Month High/Prev Month Low", "High/Low Label", group=grpPrevMonth, tooltip=splitTooltip)
+prevMonthTextColor = input.color(color.white, "Appearance", group=grpPrevMonth, inline=inline7)
+prevMonthColor = input.color(color.new(color.black, defaultTransparency), "", group=grpPrevMonth, inline=inline7)
+prevMonthStyle = input.string("Solid", "", ["Solid", "Dashed", "Dotted", "None/Hidden"], group=grpPrevMonth, inline=inline7)
+prevMonthWidth = input.int(1, "", options=[1, 2, 3, 4], group=grpPrevMonth, inline=inline7, tooltip=lineTooltip)
+
+grpATRs = "Average True Range Highs & Lows"
+inline8 = "8"
+atrText = input.string("ATR High/ATR Low", "High/Low Label", group=grpATRs, tooltip=splitTooltip)
+atrTextColor = input.color(color.white, "Appearance", group=grpATRs, inline=inline8)
+atrColor = input.color(color.new(color.teal, defaultTransparency), "", group=grpATRs, inline=inline8)
+atrStyle = input.string("Solid", "", ["Solid", "Dashed", "Dotted", "None/Hidden"], group=grpATRs, inline=inline8)
+atrWidth = input.int(1, "", options=[1, 2, 3, 4], group=grpATRs, inline=inline8, tooltip=lineTooltip)
+
+inline9 = "9"
+atr2Text = input.string("2xATR High/2xATR Low", "High/Low Label", group=grpATRs, tooltip=splitTooltip)
+atr2TextColor = input.color(color.white, "Appearance", group=grpATRs, inline=inline9)
+atr2Color = input.color(color.new(color.olive, defaultTransparency), "", group=grpATRs, inline=inline9)
+atr2Style = input.string("Solid", "", ["Solid", "Dashed", "Dotted", "None/Hidden"], group=grpATRs, inline=inline9)
+atr2Width = input.int(1, "", options=[1, 2, 3, 4], group=grpATRs, inline=inline9, tooltip=lineTooltip)
+
+// Determine whether to show level combos based on style setting
+showPremarketHLs = premarketStyle != "None/Hidden"
+showPrevHourHLs = prevHourStyle != "None/Hidden"
+showTodayHLs = todayStyle != "None/Hidden" and session.ispremarket == false
+showAfterHoursHLs = afterHoursStyle != "None/Hidden"
+showPrevDayHLs = prevDayStyle != "None/Hidden"
+showPrevWeekHLs = prevWeekStyle != "None/Hidden"
+showPrevMonthHLs = prevMonthStyle != "None/Hidden"
+showAtrHLs = atrStyle != "None/Hidden"
+showAtr2HLs = atr2Style != "None/Hidden"
+
+// Variables used in functions
+levelsArray = array.new_float()
+dupesCountArray = array.new_int()
+insidebarCountArray = array.new_int()
+labelsArray = array.new_string()
+duplicatesArray = array.new_string()
+
+// Functions
+getLabelStyle(price, levelsArray) =>
+    labelStyle = label.style_label_left
+    // Decrease the amount of wiggle room to give for levels as price goes up
+    thresholdPercent = 0.01
+    if (price > 100)
+        thresholdPercent := 0.005
+    else if (price > 500)
+        thresholdPercent := 0.004
+    else if (price > 1000)
+        thresholdPercent := 0.003
+
+    nearbyAbove = false
+    nearbyBelow = false
+    threshold = price * thresholdPercent
+    for i = 0 to array.size(levelsArray) - 1
+        otherPrice = array.get(levelsArray, i)
+        nearbyAbove := price != otherPrice and otherPrice > price and otherPrice < price + threshold ? true : nearbyAbove
+        nearbyBelow := price != otherPrice and otherPrice < price and otherPrice > price - threshold ? true : nearbyBelow
+
+    if (nearbyAbove and nearbyBelow != true)
+        labelStyle := label.style_label_upper_left
+    if (nearbyBelow and nearbyAbove != true)
+        labelStyle := label.style_label_lower_left
+    // if (nearbyBelow and nearbyAbove)
+    //     _labelStyle := label.style_label_right
+
+    labelStyle
+
+// Examines priceArray for prices "near" the given price. If found, returns the index of the found price in priceArray
+indexOfNearby(priceArray, price) =>
+    nearbyThreshold = 0.01
+    if (price > 1)
+        nearbyThreshold := 0.02
+    if (price > 10)
+        nearbyThreshold := 0.04
+    if (price > 100)
+        nearbyThreshold := 0.1
+    if (price > 200)
+        nearbyThreshold := 0.20
+    if (price > 500)
+        nearbyThreshold := 0.60
+    if (price > 1000)
+        nearbyThreshold := 1.0
+
+    indexOf = -1
+    size = array.size(priceArray)
+    if (size > 0)
+        for i = 0 to size - 1
+            otherPrice = array.get(priceArray, i)
+            if (
+               (otherPrice >= price and otherPrice <= price + nearbyThreshold)
+               or 
+               (otherPrice <= price and otherPrice >= price - nearbyThreshold)
+               )
+                indexOf := i
+    indexOf
+
+combineDuplicate(price, show, labelText, insideBarCount) => 
+    if (show)
+        // First, account for inside bars on the labels
+        _labelText = labelText
+        if (insideBarCount > 0)
+            _labelText := labelText + str.replace(insidebarText, '#', str.tostring(insideBarCount))
+
+        // Prepend price if necessary
+        if (showPrice)
+            _labelText := str.tostring(price, format.mintick) + ": " + _labelText
+
+        // Now look in the collections to see if this item already has an entry
+        matchIndex = indexOfNearby(levelsArray, price)
+        if (matchIndex >= 0)
+            // If it does, append this label to that one
+            array.set(labelsArray, matchIndex, array.get(labelsArray, matchIndex) + ", " + _labelText)
+            // And add it to the duplicates array
+            array.push(duplicatesArray, labelText)
+            // And increase the duplicate count for this price level
+            array.set(dupesCountArray, matchIndex, array.get(dupesCountArray, matchIndex) + 1)
+            // Increase the insidebar count if necessary
+            array.set(insidebarCountArray, matchIndex, array.get(insidebarCountArray, matchIndex) + insideBarCount)
+        else
+            // If no match...
+            // Add it to the collections
+            array.push(levelsArray, price)
+            array.push(labelsArray, _labelText)
+            array.push(dupesCountArray, 1)
+            array.push(insidebarCountArray, insideBarCount)
+
+drawLevel(price, show, labelText, lineColor, width, style) =>
+    matchIndex = indexOfNearby(levelsArray, price)
+    if (matchIndex >= 0 and show)
+        matchPrice = array.get(levelsArray, matchIndex)
+        matchLabelText = array.get(labelsArray, matchIndex)
+        _show = show
+        // If this value was a duplicate, don't show it
+        if (show and array.indexof(duplicatesArray, labelText) >= 0)
+            _show := false
+
+        isInsideBar = array.get(insidebarCountArray, matchIndex) > 0
+        _lineColor = isInsideBar ? insidebarColor : lineColor
+        textColor = isInsideBar ? insidebarTextColor : color.white
+        lineWidth = isInsideBar ? insidebarWidth : width
+        lineStyle = isInsideBar ? insidebarStyle : style
+        // Thicken the lines if necessary
+        dupesCount = 0
+        if (autoThicken)
+            dupesCount := array.get(dupesCountArray, matchIndex)
+            if (dupesCount > lineWidth)
+                lineWidth := dupesCount
+        
+        // Change the label style/position if this level is too close
+        labelStyle = label.style_label_left // getLabelStyle(price, levelsArray)
+
+        Utilities.drawLineAndLabel(_show, labelStyle, bar_index[0] + labelOffset, price, lineStyle, lineWidth, _lineColor, matchLabelText + " ", lblTextSize, textColor)
+
+        // If the matched price doesn't equal the provided price, draw the line for that level also
+        if (barstate.islast and matchPrice != price)
+            Utilities.drawLine(true, bar_index[0], price, style, width, lineColor)
+
+getPremarketLevel(highOrLow) =>
+    hourStart = 4 
+    minStart = 0
+    hourEnd = 9
+    minEnd = 29
+    resolution = "1" // Will use the 1m to determine the highs/lows of premarket
+    start = (hourStart * 60) + minStart
+    end = (hourEnd * 60) + minEnd
+    level = request.security(syminfo.tickerid, resolution, Utilities.getLevelBetweenTimes(highOrLow, start, end))
+    level
+
+getAfterHoursLevel(highOrLow) =>
+    hourStart = 16 
+    minStart = 0
+    hourEnd = 19
+    minEnd = 59
+    resolution = "1" // Will use the 1m to determine the highs/lows of after hours session
+    start = (hourStart * 60) + minStart
+    end = (hourEnd * 60) + minEnd
+    level = request.security(syminfo.tickerid, resolution, Utilities.getLevelBetweenTimes(highOrLow, start, end))
+    level
+
+getAtrLevel(atr, highOrLow, refPrice, multiplier = 1) =>
+    level = session.ismarket ? atr * multiplier : na
+    if not na(level)
+        level := highOrLow == 'high' ? refPrice + level : refPrice - level
+    level
+
+getHLString(hl, str) =>
+    slash = str.pos(str, "/")
+    ret = na(slash) ? str : hl == 'high' ? str.substring(str, 0, slash) : str.substring(str, slash+1)
+    ret
+
+getDailyLevels() =>
+    h = session.ispremarket ? high : high[1]
+    l = session.ispremarket ? low : low[1]
+    [h, l, Utilities.getInsideBarCount()]
+
+// Define the levels
+premarketHigh = getPremarketLevel('high')
+premarketLow = getPremarketLevel('low')
+[prevHourHigh, prevHourLow, prevHourInsideBarCount] = request.security(syminfo.tickerid, '60', [high[1], low[1], Utilities.getInsideBarCount()])
+[todayHigh, todayLow, atr, todayInsideBarCount] = request.security(syminfo.tickerid, 'D', [high, low, ta.atr(14), Utilities.getInsideBarCount()])
+afterHoursHigh = getAfterHoursLevel('high')
+afterHoursLow = getAfterHoursLevel('low')
+[prevDayHigh, prevDayLow, prevDayInsideBarCount] = request.security(syminfo.tickerid, 'D', [high[1], low[1], Utilities.getInsideBarCount()])
+[prevWeekHigh, prevWeekLow, prevWeekInsideBarCount] = request.security(syminfo.tickerid, 'W', [high[1], low[1], Utilities.getInsideBarCount()])
+[prevMonthHigh, prevMonthLow, prevMonthInsideBarCount] = request.security(syminfo.tickerid, 'M', [high[1], low[1], Utilities.getInsideBarCount()])
+atrHigh = getAtrLevel(atr, 'high', todayLow)
+atrLow = getAtrLevel(atr, 'low', todayHigh)
+atr2High = getAtrLevel(atr, 'high', todayLow, 2)
+atr2Low = getAtrLevel(atr, 'low', todayHigh, 2)
+
+// Search for duplicate levels, and concatenate their labels
+if (barstate.islast)
+    // Kludge: During premarket, TV considers yesterday to be 2 days ago. This fixes that.
+    if (session.ispremarket)
+        prevDayHigh := todayHigh
+        prevDayLow := todayLow
+
+    // Only show the lines on timeframes where they make sense
+    t = timeframe.in_seconds('')
+    th = timeframe.in_seconds('60')
+    td = timeframe.in_seconds('1D')
+    tw = timeframe.in_seconds('1W')
+    tm = timeframe.in_seconds('1M')
+    showAfterHours = t < td and showAfterHoursHLs
+    showPremarket = t < td and showPremarketHLs
+    showPrevHour = t <= th and showPrevHourHLs
+    showToday = t <= td and showTodayHLs
+    showPrevDay = t <= td and showPrevDayHLs
+    showPrevWeek = t <= tw and showPrevWeekHLs
+    showPrevMonth = t <= tm and showPrevMonthHLs
+    showAtr = t <= td and showAtrHLs
+    showAtr2 = t <= td and showAtr2HLs
+
+    combineDuplicate(premarketHigh, showPremarket, getHLString('high', premarketText), 0)
+    combineDuplicate(premarketLow, showPremarket, getHLString('low', premarketText), 0)
+    combineDuplicate(prevHourHigh, showPrevHour, getHLString('high', prevHourText), prevHourInsideBarCount)
+    combineDuplicate(prevHourLow, showPrevHour, getHLString('low', prevHourText), prevHourInsideBarCount)
+    combineDuplicate(todayHigh, showToday, getHLString('high', todayText), todayInsideBarCount)
+    combineDuplicate(todayLow, showToday, getHLString('low', todayText), todayInsideBarCount)
+    combineDuplicate(afterHoursHigh, showAfterHours, getHLString('high', afterHoursText), 0)
+    combineDuplicate(afterHoursLow, showAfterHours, getHLString('low', afterHoursText), 0)
+    combineDuplicate(atrHigh, showAtr, getHLString('high', atrText), 0)
+    combineDuplicate(atrLow, showAtr, getHLString('low', atrText), 0)
+    combineDuplicate(atr2High, showAtr2, getHLString('high', atr2Text), 0)
+    combineDuplicate(atr2Low, showAtr2, getHLString('low', atr2Text), 0)
+    combineDuplicate(prevDayHigh, showPrevDay, getHLString('high', prevDayText), prevDayInsideBarCount)
+    combineDuplicate(prevDayLow, showPrevDay, getHLString('low', prevDayText), prevDayInsideBarCount)
+    combineDuplicate(prevWeekHigh, showPrevWeek, getHLString('high', prevWeekText), prevWeekInsideBarCount)
+    combineDuplicate(prevWeekLow, showPrevWeek, getHLString('low', prevWeekText), prevWeekInsideBarCount)
+    combineDuplicate(prevMonthHigh, showPrevMonth, getHLString('high', prevMonthText), prevMonthInsideBarCount)
+    combineDuplicate(prevMonthLow, showPrevMonth, getHLString('low', prevMonthText), prevMonthInsideBarCount)
+
+    // Draw the lines and labels
+    drawLevel(prevMonthHigh, showPrevMonth, getHLString('high', prevMonthText), prevMonthColor, prevMonthWidth, prevMonthStyle)
+    drawLevel(prevMonthLow, showPrevMonth, getHLString('low', prevMonthText), prevMonthColor, prevMonthWidth, prevMonthStyle)
+    drawLevel(prevWeekHigh, showPrevWeek, getHLString('high', prevWeekText), prevWeekColor, prevWeekWidth, prevWeekStyle)
+    drawLevel(prevWeekLow, showPrevWeek, getHLString('low', prevWeekText), prevWeekColor, prevWeekWidth, prevWeekStyle)
+    drawLevel(prevDayHigh, showPrevDay, getHLString('high', prevDayText), prevDayColor, prevDayWidth, prevDayStyle)
+    drawLevel(prevDayLow, showPrevDay, getHLString('low', prevDayText), prevDayColor, prevDayWidth, prevDayStyle)
+    drawLevel(afterHoursHigh, showAfterHours, getHLString('high', afterHoursText), afterHoursColor, afterHoursWidth, afterHoursStyle)
+    drawLevel(afterHoursLow, showAfterHours, getHLString('low', afterHoursText), afterHoursColor, afterHoursWidth, afterHoursStyle)
+    drawLevel(atrHigh, showAtr, getHLString('high', atrText), atrColor, atrWidth, atrStyle)
+    drawLevel(atrLow, showAtr, getHLString('low', atrText), atrColor, atrWidth, atrStyle)
+    drawLevel(atr2High, showAtr2, getHLString('high', atr2Text), atr2Color, atr2Width, atr2Style)
+    drawLevel(atr2Low, showAtr2, getHLString('low', atr2Text), atr2Color, atr2Width, atr2Style)
+    drawLevel(todayHigh, showToday, getHLString('high', todayText), todayColor, todayWidth, todayStyle)
+    drawLevel(todayLow, showToday, getHLString('low', todayText), todayColor, todayWidth, todayStyle)
+    drawLevel(prevHourHigh, showPrevHour, getHLString('high', prevHourText), prevHourColor, prevHourWidth, prevHourStyle)
+    drawLevel(prevHourLow, showPrevHour, getHLString('low', prevHourText), prevHourColor, prevHourWidth, prevHourStyle)
+    drawLevel(premarketHigh, showPremarket, getHLString('high', premarketText), premarketColor, premarketWidth, premarketStyle)
+    drawLevel(premarketLow, showPremarket, getHLString('low', premarketText), premarketColor, premarketWidth, premarketStyle)
