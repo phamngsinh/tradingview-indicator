@@ -1,0 +1,156 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © jmosullivan
+
+// @version=5
+// Created By jmosullivan
+// Symbols at Highs & Lows 
+
+// For the chosen symbols, this shows a table that indicates (by color) if each symbol is at 
+// the high or low of day, and if all are at highs or lows together. When used with the main indexes, 
+// this can be a great indicator that a trend day is occurring in the market. You can customize the 
+// indicator to use up to 8 symbols of your choice. You can also customize the appearance so that it 
+// only displays when all symbols are at their highs or lows. Finally, you can customize the % threshold
+// to use when measuring how close to the high/low of day price needs to be in order to be considered 
+// "at high/low of day". 
+
+indicator(title='Symbols at Highs & Lows', shorttitle="Symbols HLs", overlay=true)
+
+import jmosullivan/PrivateTable/6
+
+var COLOR_TRANSPARENT = color.rgb(255,255,255,100)
+
+// Configuration
+var threshold     = input.float       (group="Configuration", defval=10,             title="% High/Low of Days Range", tooltip='When a symbol is within this percentage of the high or low of day, it is considered to be "at the high" or "at the low".')
+grp = "Appearance"
+textSize          = input.string      (group=grp, defval=size.small,                 title="Text Size",  options=[size.tiny, size.small, size.normal, size.large])
+verticalOffset    = input.int         (group=grp, defval=0,                          title="Vertical Offset", options=[0, 1, 2, 3], tooltip="The amount of space to place the table away from the top or bottom (depending on the position chosen below)")
+position          = input.string      (group=grp, defval=position.top_right,         title="Position",   options=[position.top_right, position.bottom_right, position.bottom_left])
+showTitle         = input.bool        (group=grp, defval=true, inline="title",       title="Show Title")
+title             = input.string      (group=grp, defval="HLs", inline="title",      title="", tooltip="This allows you to customize the table title.")
+showTable         = input.bool        (group=grp, defval=true,                       title="Show Table")
+showStr           = input.string      (group=grp, defval="Percent in Range",         title="Show % in Range", options=["Words", "Percent in Range", "Both"], tooltip="Customize what shows below the symbol in the table: a word indicating where it is in the days range, a percentage or both.")
+showMsg           = input.bool        (group=grp, defval=true,                       title="Show Highs / Lows Message", tooltip="When all symbols are at the highs or lows together and this is checked, a message appears to raise awareness. If you choose to not show the table but do check this, nothing would appear on your screen until all symbols were at the highs or low together, and then this message would appear.")
+
+grp2 = "Colors"
+colorModerateText = input.color       (group=grp2, defval=color.white,             title="Moderate Color Text / BG", inline="1")
+colorModerate     = input.color       (group=grp2, defval=color.rgb(40, 98, 255),  title="", inline="1")
+colorExtremeText  = input.color       (group=grp2, defval=color.white,             title="Extreme Color Text / BG", inline="2")
+colorExtreme      = input.color       (group=grp2, defval=color.rgb(235, 46, 175), title="", inline="2")
+
+grp3 = "Symbols"
+sym1 = input.string(group=grp3, defval="QQQ", 	title="Symbol 1")
+sym2 = input.string(group=grp3, defval="IWM", 	title="Symbol 2")
+sym3 = input.string(group=grp3, defval="XLF", 	title="Symbol 3")
+sym4 = input.string(group=grp3, defval="XLV", 	title="Symbol 4")
+sym5 = input.string(group=grp3, defval="", 		title="Symbol 5")
+sym6 = input.string(group=grp3, defval="", 		title="Symbol 6")
+sym7 = input.string(group=grp3, defval="", 		title="Symbol 7")
+sym8 = input.string(group=grp3, defval="", 		title="Symbol 8")
+
+// Functions
+
+getSymbol(symbol) =>
+    p = str.pos(symbol, ":")
+    ret = na(p) ? symbol : str.substring(symbol, p + 1)
+    ret
+
+// Convenience function for adding to the arrays
+addSymbol(all, symbolArray, dataArray, bgColorArray, textColorArray, symbol, high, low, close, threshold) =>
+    _all = all
+    _threshold = threshold / 100
+    if (symbol != "")
+        level = "Mids"
+        bgColor = colorModerate
+        textColor = colorModerateText
+        percentInRange = (close - low) / (high - low)
+        percentInRangeStr = str.tostring(percentInRange, '#%')
+        highThreshold = 1 - _threshold
+        if (percentInRange >= highThreshold)
+            level := "Highs"
+            bgColor := colorExtreme
+            textColor := colorExtremeText
+        if (percentInRange <= _threshold)
+            level := "Lows"
+            bgColor := colorExtreme
+            textColor := colorExtremeText
+
+        if (na(_all))
+            _all := level
+        else if (_all != level)
+            _all := "No"
+
+        if (showStr == "Both")
+            level := level + " " + percentInRangeStr
+        else if (showStr == "Percent in Range")
+            level := percentInRangeStr
+        
+        _symbol = getSymbol(symbol)
+        array.push(symbolArray, _symbol)
+        array.push(dataArray, " " + _symbol + " \n" + level)
+        array.push(bgColorArray, bgColor)
+        array.push(textColorArray, textColor)
+    _all
+
+// Indicator Logic
+
+// Load the data
+[h1, l1, c1] = request.security(sym1 == "" ? na : sym1, 'D', [high, low, close])
+[h2, l2, c2] = request.security(sym2 == "" ? na : sym2, 'D', [high, low, close])
+[h3, l3, c3] = request.security(sym3 == "" ? na : sym3, 'D', [high, low, close])
+[h4, l4, c4] = request.security(sym4 == "" ? na : sym4, 'D', [high, low, close])
+[h5, l5, c5] = request.security(sym5 == "" ? na : sym5, 'D', [high, low, close])
+[h6, l6, c6] = request.security(sym6 == "" ? na : sym6, 'D', [high, low, close])
+[h7, l7, c7] = request.security(sym7 == "" ? na : sym7, 'D', [high, low, close])
+[h8, l8, c8] = request.security(sym8 == "" ? na : sym8, 'D', [high, low, close])
+
+// Build up the array to be rendered
+symbolArray = array.new_string()
+dataArray = array.new_string()
+bgColorArray = array.new_color()
+textColorArray = array.new_color()
+if (showTitle)
+    array.push(dataArray, " " + title + " ")
+    array.push(bgColorArray, colorExtreme)
+    array.push(textColorArray, colorExtremeText)
+
+all = string(na)
+all := addSymbol(all, symbolArray, dataArray, bgColorArray, textColorArray, sym1, h1, l1, c1, threshold)
+all := addSymbol(all, symbolArray, dataArray, bgColorArray, textColorArray, sym2, h2, l2, c2, threshold)
+all := addSymbol(all, symbolArray, dataArray, bgColorArray, textColorArray, sym3, h3, l3, c3, threshold)
+all := addSymbol(all, symbolArray, dataArray, bgColorArray, textColorArray, sym4, h4, l4, c4, threshold)
+all := addSymbol(all, symbolArray, dataArray, bgColorArray, textColorArray, sym5, h5, l5, c5, threshold)
+all := addSymbol(all, symbolArray, dataArray, bgColorArray, textColorArray, sym6, h6, l6, c6, threshold)
+all := addSymbol(all, symbolArray, dataArray, bgColorArray, textColorArray, sym7, h7, l7, c7, threshold)
+all := addSymbol(all, symbolArray, dataArray, bgColorArray, textColorArray, sym8, h8, l8, c8, threshold)
+
+// Now that the colums are built up, put it in a matrix
+dataMatrix = matrix.new<string>()
+bgColorMatrix = matrix.new<color>()
+textColorMatrix = matrix.new<color>()
+if (showTable)
+    matrix.add_row(dataMatrix, matrix.rows(dataMatrix), dataArray)
+    matrix.add_row(bgColorMatrix, matrix.rows(bgColorMatrix), bgColorArray)
+    matrix.add_row(textColorMatrix, matrix.rows(textColorMatrix), textColorArray)
+
+// If all are at the highs or lows together, add a message row at the bottom of the table spanning all columns
+if (showMsg and (all == "Highs" or all == "Lows"))
+    columnCount = showTable ? array.size(dataArray) : 1
+    msgArray = array.new_string(columnCount)
+    msg = "All symbols at " + all
+    if (showTable)
+        msg := "colspan:" + str.tostring(columnCount) + "::" + msg
+    else
+        msg := msg + ": " + array.join(symbolArray, ", ")
+
+    array.set(msgArray, 0, msg)
+    matrix.add_row(dataMatrix, matrix.rows(dataMatrix), msgArray)
+    // msgBgColor = COLOR_TRANSPARENT
+    // msgTextColor = COLOR_TRANSPARENT
+    // if (all == "Highs" or all == "Lows")
+    msgBgColor = colorExtreme
+    msgTextColor = colorExtremeText
+
+    matrix.add_row(bgColorMatrix, matrix.rows(bgColorMatrix), array.new_color(columnCount, msgBgColor))
+    matrix.add_row(textColorMatrix, matrix.rows(textColorMatrix), array.new_color(columnCount, msgTextColor))
+
+PrivateTable.fromMatrix(dataMatrix, bgColorMatrix, textColorMatrix, position, verticalOffset, false, textSize, 2, "\n", tableNumRows=2)
