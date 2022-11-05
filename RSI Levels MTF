@@ -17,10 +17,10 @@
 //  * Toggle overbought (RSI 70) or oversold (RSI 30) on/off completely
 
 // Credit to @abdomi for the RSI Levels script, which inspired this one. That script only allows you to see RSI levels for your 
-// current timeframe on your current timeframe.
+// current timeframe on your current timeframe. 
 
 //@version=5
-indicator("RSI Lvls MTF", overlay = true)
+indicator("RSI Levels MTF", shorttitle="RSI Levels MTF", overlay = true)
 
 // Configuration
 grp_mn = "Global Line Settings"
@@ -83,8 +83,8 @@ tf_str(tf, suffix) =>
 // Function to do the plotting (adapted from abdomi's script)
 rsi_to_plot(tf, rsi_lvl, len) =>
     ep = 2 * len - 1
-    auc = request.security(syminfo.tickerid, tf, ta.ema(math.max(close - close[1], 0), ep))
-    adc = request.security(syminfo.tickerid, tf, ta.ema(math.max(close[1] - close, 0), ep))
+    auc = request.security(symbol=syminfo.tickerid, timeframe=tf, expression=ta.ema(math.max(close - close[1], 0), ep), lookahead=barmerge.lookahead_on)
+    adc = request.security(symbol=syminfo.tickerid, timeframe=tf, expression=ta.ema(math.max(close[1] - close, 0), ep), lookahead=barmerge.lookahead_on)
     x = (len - 1) * ( adc * rsi_lvl / (100 - rsi_lvl) - auc)
     x >= 0 ? close + x : close + x * (100 - rsi_lvl) / rsi_lvl
 
