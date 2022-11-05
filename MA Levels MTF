@@ -1,0 +1,115 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © jmosullivan
+
+// The exponential moving average (EMA) tracks price over time, giving more importance to recent price data than simple 
+// moving average (SMA). MAs for larger timeframes are generally considered to be stronger supports/resistances for 
+// price to move through than smaller timeframes. This indicator allows you to specify two different MA lengths that 
+// you want to track. Additionally, this indicator allows you to display not just the EMA levels of your currently 
+// viewed timeframe on the chart, but also shows the MA levels of up to 4 different timeframes on the same chart. This 
+// allows you to quickly see if multiple MA levels are aligning across different timeframes, which is an even stronger 
+// indication that price is going to meet support or resistance when it meets those levels on the chart. There are a lot 
+// of nice configuration options, like:
+// 
+// * Ability to choose Exponential MA or Simple MA
+// * Ability to customize the MA lengths you want to track
+// * Style customization (color, thickness, size)
+// * Hide any timeframes/levels you aren't interested in
+// * Labels on the chart so you can tell which plots are the EMA levels
+// * Optionally display the plot as a horizontal line if all you care about is the EMA level right now
+
+//@version=5
+indicator("MA Lvls MTF", overlay = true)
+
+import jmosullivan/Utilities/12
+
+// Functions
+requestSecurityNoRepaint(sym, tf, src) =>
+    request.security(sym, tf, src[barstate.isrealtime ? 1 : 0])[barstate.isrealtime ? 0 : 1]
+
+timeframestr(tf, suffix, type) =>
+    ma_str = type == "Simple MA" ? "sma" : "ema"
+    Utilities.timeframeToString(tf) + " " + str.tostring(suffix) + ma_str + " "
+
+// Define some inputs to control style & visbility
+grpMn = "MA Settings"
+maType          = input.string  (group=grpMn, defval="Exponential MA", title="MA Type", options=["Simple MA", "Exponential MA"])
+showLabels      = input.bool    (group=grpMn, defval=true,  title="Show Labels")
+labelStyle      = input.string  (group=grpMn, defval=label.style_label_left, title="Label Style", options=[label.style_label_center, label.style_label_down, label.style_label_left, label.style_label_lower_left, label.style_label_lower_right, label.style_label_right, label.style_label_up, label.style_label_upper_left, label.style_label_upper_right, label.style_none], tooltip="Where should the label be positioned? Options are any of label.style_label_* or None")
+labelTextSize   = input.string  (group=grpMn, defval=size.small, title="Label Text Size", options=[size.auto, size.tiny, size.small, size.normal, size.large, size.huge])
+labelOffset     = input.int     (group=grpMn, defval=5,     title="Label Offset",         minval=1, maxval=40, step=1)
+doLine          = input.bool    (group=grpMn, defval=false, title="Do Horizontal Lines")
+lineWidth       = input.int     (group=grpMn, defval=1,     title="Line Weight",          options=[1,2,3,4])
+transparency = 0
+ma1 = "MA1"
+ma2 = "MA2"
+
+grpEmas = "MA Lengths"
+ma1Length = input.int(group=grpEmas, defval=12, title="MA1", inline="malength")
+ma2Length = input.int(group=grpEmas, defval=26, title="MA2", inline="malength")
+
+grpTfs = "Timeframe Settings"
+inline1 = "inline_1"
+defaultColor1 = color.new(color.aqua, transparency)
+timeframe1         = input.timeframe  (group=grpTfs, inline=inline1, defval="60",      title="")
+ma1Color1  = input.color      (group=grpTfs, inline=inline1, defval=defaultColor1, title="")
+ma1Show1   = input.bool       (group=grpTfs, inline=inline1, defval=true,      title=ma1)
+ma2Color1  = input.color      (group=grpTfs, inline=inline1, defval=defaultColor1, title="")
+ma2Show1   = input.bool       (group=grpTfs, inline=inline1, defval=true,      title=ma2)
+
+inline2 = "inline_2"
+defaultColor2 = color.new(color.blue, transparency)
+timeframe2          = input.timeframe (group=grpTfs, inline=inline2, defval="240",     title="")
+ma1Color2   = input.color     (group=grpTfs, inline=inline2, defval=defaultColor2, title="")
+ma1Show2    = input.bool      (group=grpTfs, inline=inline2, defval=true,      title=ma1)
+ma2Color2   = input.color     (group=grpTfs, inline=inline2, defval=defaultColor2, title="")
+ma2Show2    = input.bool      (group=grpTfs, inline=inline2, defval=true,      title=ma2)
+
+inline3 = "inline_3"
+defaultColor3 = color.new(color.orange, transparency)
+timeframe3          = input.timeframe (group=grpTfs, inline=inline3, defval="720",     title="")
+ma1Color3   = input.color     (group=grpTfs, inline=inline3, defval=defaultColor3, title="")
+ma1Show3    = input.bool      (group=grpTfs, inline=inline3, defval=true,      title=ma1)
+ma2Color3   = input.color     (group=grpTfs, inline=inline3, defval=defaultColor3, title="")
+ma2Show3    = input.bool      (group=grpTfs, inline=inline3, defval=true,      title=ma2)
+
+inline4 = "inline_4"
+defaultColor4 = color.new(color.purple, transparency)
+timeframe4          = input.timeframe (group=grpTfs, inline=inline4, defval="D",       title="")
+ma1Color4   = input.color     (group=grpTfs, inline=inline4, defval=defaultColor4, title="")
+ma1Show4    = input.bool      (group=grpTfs, inline=inline4, defval=true,      title=ma1)
+ma2Color4   = input.color     (group=grpTfs, inline=inline4, defval=defaultColor4, title="")
+ma2Show4    = input.bool      (group=grpTfs, inline=inline4, defval=true,      title=ma2)
+
+taMa1 = maType == "Simple MA" ? ta.sma(close, ma1Length) : ta.ema(close, ma1Length)
+taMa2 = maType == "Simple MA" ? ta.sma(close, ma2Length) : ta.ema(close, ma2Length)
+
+// Define the lines to be plotted
+ma11 = ma1Show1 ? request.security(syminfo.tickerid, timeframe1, taMa1) : na
+ma21 = ma2Show1 ? request.security(syminfo.tickerid, timeframe1, taMa2) : na
+ma12 = ma1Show2 ? request.security(syminfo.tickerid, timeframe2, taMa1) : na
+ma22 = ma2Show2 ? request.security(syminfo.tickerid, timeframe2, taMa2) : na
+ma13 = ma1Show3 ? request.security(syminfo.tickerid, timeframe3, taMa1) : na
+ma23 = ma2Show3 ? request.security(syminfo.tickerid, timeframe3, taMa2) : na
+ma14 = ma1Show4 ? request.security(syminfo.tickerid, timeframe4, taMa1) : na
+ma24 = ma2Show4 ? request.security(syminfo.tickerid, timeframe4, taMa2) : na
+
+// plot them
+plotOffset = doLine ? -9999 : 0
+// plot(ma11, color=ma1Color1, title="TF1 MA1", trackprice=doLine, offset=plotOffset, editable=false, style=plot.style_line, lineWidth=lineWidth)
+// plot(ma21, color=ma2Color1, title="TF1 MA2", trackprice=doLine, offset=plotOffset, editable=false, style=plot.style_line, lineWidth=lineWidth)
+// plot(ma12, color=ma1Color2, title="TF2 MA1", trackprice=doLine, offset=plotOffset, editable=false, style=plot.style_line, lineWidth=lineWidth)
+// plot(ma22, color=ma2Color2, title="TF2 MA2", trackprice=doLine, offset=plotOffset, editable=false, style=plot.style_line, lineWidth=lineWidth)
+// plot(ma13, color=ma1Color3, title="TF3 MA1", trackprice=doLine, offset=plotOffset, editable=false, style=plot.style_line, lineWidth=lineWidth)
+// plot(ma23, color=ma2Color3, title="TF3 MA2", trackprice=doLine, offset=plotOffset, editable=false, style=plot.style_line, lineWidth=lineWidth)
+// plot(ma14, color=ma1Color4, title="TF4 MA1", trackprice=doLine, offset=plotOffset, editable=false, style=plot.style_line, lineWidth=lineWidth)
+// plot(ma24, color=ma2Color4, title="TF4 MA2", trackprice=doLine, offset=plotOffset, editable=false, style=plot.style_line, lineWidth=lineWidth)
+
+if (showLabels)
+    Utilities.drawLineAndLabel(ma1Show1, labelStyle, bar_index[0] + labelOffset, ma11, line.style_solid, lineWidth, ma1Color1, timeframestr(timeframe1, ma1Length, maType), labelTextSize)
+    Utilities.drawLineAndLabel(ma2Show1, labelStyle, bar_index[0] + labelOffset, ma21, line.style_solid, lineWidth, ma2Color1, timeframestr(timeframe1, ma2Length, maType), labelTextSize)
+    Utilities.drawLineAndLabel(ma1Show2, labelStyle, bar_index[0] + labelOffset, ma12, line.style_solid, lineWidth, ma1Color2, timeframestr(timeframe2, ma1Length, maType), labelTextSize)
+    Utilities.drawLineAndLabel(ma2Show2, labelStyle, bar_index[0] + labelOffset, ma22, line.style_solid, lineWidth, ma2Color2, timeframestr(timeframe2, ma2Length, maType), labelTextSize)
+    Utilities.drawLineAndLabel(ma1Show3, labelStyle, bar_index[0] + labelOffset, ma13, line.style_solid, lineWidth, ma1Color3, timeframestr(timeframe3, ma1Length, maType), labelTextSize)
+    Utilities.drawLineAndLabel(ma2Show3, labelStyle, bar_index[0] + labelOffset, ma23, line.style_solid, lineWidth, ma2Color3, timeframestr(timeframe3, ma2Length, maType), labelTextSize)
+    Utilities.drawLineAndLabel(ma1Show4, labelStyle, bar_index[0] + labelOffset, ma14, line.style_solid, lineWidth, ma1Color4, timeframestr(timeframe4, ma1Length, maType), labelTextSize)
+    Utilities.drawLineAndLabel(ma2Show4, labelStyle, bar_index[0] + labelOffset, ma24, line.style_solid, lineWidth, ma2Color4, timeframestr(timeframe4, ma2Length, maType), labelTextSize)
