@@ -1,0 +1,101 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © jmosullivan
+
+// @version=5
+// Created By jmosullivan
+// MTF RSI Grid
+
+// The relative strength index (RSI) is a momentum indicator that measures the magnitude of recent price changes to evaluate 
+// overbought or oversold conditions. The RSI is normally displayed as an oscillator separately from price and can have a 
+// reading from 0 to 100. This indicator displays the current RSI levels at up to 6 timeframes (of your choosing) in a grid. 
+// If the RSI levels reach overbought (above 70) or oversold (below 30) conditions, it changes the color to help you see that 
+// RSI has reached extreme levels. Note that in tradingview, when the chart is on a higher timeframe, the lower timeframe RSI 
+// levels don't calculate properly, so this indicator will hide those values in the grid. If none of your selected values are 
+// available, it hides the table completely. There are a lot of nice configuration options, like:
+// 
+// * Position the grid in any corner of the screen
+// * Style customization (color, thickness, size)
+// * Customize RSI length
+
+indicator(title='MTF RSI Grid', overlay=true)
+
+import jmosullivan/Utilities/12
+import jmosullivan/PrivateTable/5
+
+// Configuration
+grp = "Layout"
+verticalOffset    = input.int         (group=grp, defval=0,                         title="Vertical Offset", options=[0, 1, 2, 3])
+position          = input.string      (group=grp, defval=position.top_right,        title="Position",   options=[position.top_right, position.bottom_right, position.bottom_left])
+showTitle         = input.bool        (group=grp, defval=true,                      title="Show Title")
+textSize          = input.string      (group=grp, defval=size.small,                title="Text Size",  options=[size.tiny, size.small, size.normal])
+colorModerateText = input.color       (group=grp, defval=color.white,             title="Moderate Color Text / BG", inline="1")
+colorModerate     = input.color       (group=grp, defval=color.rgb(40, 98, 255),  title="", inline="1")
+colorExtremeText  = input.color       (group=grp, defval=color.white,             title="Extreme Color Text / BG", inline="2")
+colorExtreme      = input.color       (group=grp, defval=color.rgb(235, 46, 175), title="", inline="2")
+length            = input.int         (group=grp, defval=14,                        title="RSI Length")
+
+grp2   = "Timeframes"
+show1  = input.bool(defval=true, title="", inline="tf1", group=grp2)
+show2  = input.bool(defval=true, title="", inline="tf2", group=grp2)
+show3  = input.bool(defval=true, title="", inline="tf3", group=grp2)
+show4  = input.bool(defval=true, title="", inline="tf4", group=grp2)
+show5  = input.bool(defval=true, title="", inline="tf5", group=grp2)
+show6  = input.bool(defval=true, title="", inline="tf6", group=grp2)
+timeframe1    = input.timeframe(defval="5",   title="", inline="tf1", group=grp2)
+timeframe2    = input.timeframe(defval="15",  title="", inline="tf2", group=grp2)
+timeframe3    = input.timeframe(defval="60",  title="", inline="tf3", group=grp2)
+timeframe4    = input.timeframe(defval="240", title="", inline="tf4", group=grp2)
+timeframe5    = input.timeframe(defval="720", title="", inline="tf5", group=grp2)
+timeframe6    = input.timeframe(defval="D",   title="", inline="tf6", group=grp2)
+
+// Functions
+// Convenience function for adding to the matrices
+addTimeframe(dataArray, bgColorArray, textColorArray, timeframe, rsi, show) =>
+    if (show)
+        bgColor = rsi >= 70 or rsi <= 30 ? colorExtreme : colorModerate
+        textColor = rsi >= 70 or rsi <= 30 ? colorExtremeText : colorModerateText
+        array.push(dataArray, " " + Utilities.timeframeToString(timeframe) + " \n " + str.format("{0,number,#}" + " ", rsi))
+        array.push(bgColorArray, bgColor)
+        array.push(textColorArray, textColor)
+
+requestSecurityProxy(_tickerid, _timeframe, _expression) => 
+    request.security(_tickerid, _timeframe, _expression, lookahead=barmerge.lookahead_on)
+
+requestSecurityLower(tickerid, timeframe, expression) =>
+    _timeframe = timeframe.in_seconds('') < timeframe.in_seconds(timeframe) ? '' : timeframe
+    array<float> lowerTimeframeArray = request.security_lower_tf(syminfo.tickerid, _timeframe, expression)
+    array.size(lowerTimeframeArray) > 0 ? array.get(lowerTimeframeArray, array.size(lowerTimeframeArray) - 1) : na
+
+requestSecurity(tickerid, timeframe, expression) =>
+    timeframe.in_seconds('') < timeframe.in_seconds(timeframe) ? requestSecurityProxy(tickerid, timeframe, expression) : requestSecurityLower(tickerid, timeframe, expression)
+
+rsi = ta.rsi(close, length)
+rsi1 = requestSecurity(syminfo.tickerid, timeframe1, rsi)
+rsi2 = requestSecurity(syminfo.tickerid, timeframe2, rsi)
+rsi3 = requestSecurity(syminfo.tickerid, timeframe3, rsi)
+rsi4 = requestSecurity(syminfo.tickerid, timeframe4, rsi)
+rsi5 = requestSecurity(syminfo.tickerid, timeframe5, rsi)
+rsi6 = requestSecurity(syminfo.tickerid, timeframe6, rsi)
+
+// Build up the array to be rendered
+dataArray = array.new_string()
+bgColorArray = array.new_color()
+textColorArray = array.new_color()
+if (showTitle)
+    array.push(dataArray, " RSI ")
+    array.push(bgColorArray, colorExtreme)
+    array.push(textColorArray, colorExtremeText)
+
+addTimeframe(dataArray, bgColorArray, textColorArray, timeframe1, rsi1, show1)
+addTimeframe(dataArray, bgColorArray, textColorArray, timeframe2, rsi2, show2)
+addTimeframe(dataArray, bgColorArray, textColorArray, timeframe3, rsi3, show3)
+addTimeframe(dataArray, bgColorArray, textColorArray, timeframe4, rsi4, show4)
+addTimeframe(dataArray, bgColorArray, textColorArray, timeframe5, rsi5, show5)
+addTimeframe(dataArray, bgColorArray, textColorArray, timeframe6, rsi6, show6)
+
+int dataSize = array.size(dataArray)
+if (showTitle)
+    dataSize -= 1
+
+if barstate.islast and dataSize > 0
+	PrivateTable.fromArray(dataArray, bgColorArray, textColorArray, position, verticalOffset, false, textSize, 2, "\n")
