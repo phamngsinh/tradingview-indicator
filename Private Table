@@ -1,0 +1,295 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © jmosullivan
+
+//@version=5
+
+// @description This library provides an easy way to convert arrays and matrixes of data into tables. There are 
+// a few different implementations of each function so you can get more or less control over the appearance of 
+// the tables. The basic rule of thumb is that all matrix rows must have the same number of columns, and if you 
+// are providing multiple arrays/matrixes to specify additional colors (background/text), they must have the 
+// same number of rows/columns as the data array. Finally, you do have the option of spanning cells across rows
+// or columns with some special syntax in the data cell. Look at the examples to see how the arrays and matrixes 
+// need to be built before they can be used by the functions. 
+library("PrivateTable", true)
+
+import jmosullivan/Utilities/12
+
+// Constants used in the tables (as defaults, they can be overridden by custom scripts)
+color COLOR_HOT = #e500a4
+color COLOR_COOL = #2962ff
+color COLOR_TEXT = color.white
+
+getRowColData(string dataString) =>
+	colspan = 1
+	rowspan = 1
+	returnString = dataString
+	array<string> stringParts = str.split(dataString, "::")
+	strPart = ""
+	stringPartsSize = array.size(stringParts)
+	if (stringPartsSize > 0)
+		for i = 0 to stringPartsSize - 1
+			strPart := array.get(stringParts, i)
+			if (str.contains(strPart, "rowspan:"))
+				rowspan := math.round(str.tonumber(str.substring(strPart, 8)))
+			else 
+				if (str.contains(strPart, "colspan:"))
+					colspan := math.round(str.tonumber(str.substring(strPart, 8)))
+				else
+					returnString := strPart
+
+	[rowspan, colspan, returnString]
+
+// @function Helper function that converts a float matrix to a string matrix so it can be rendered with the fromMatrix function
+// @param floatMatrix (matrix<float>) the float matrix to convert to a string matrix.
+// @returns matrix<string> The string matrix to render.
+export floatMatrixToString(matrix<float> floatMatrix) => 
+    rows = matrix.rows(floatMatrix)
+    cols = matrix.columns(floatMatrix)
+    stringMatrix = matrix.new<string>(rows, cols)
+    if (rows > 0 and cols > 0)
+        for a = 0 to rows - 1
+            for b = 0 to cols - 1
+                matrix.set(stringMatrix, a, b, str.tostring(matrix.get(floatMatrix, a, b)))
+
+    stringMatrix
+
+// @function Takes three matrixes (data, background color, and text color) and converts them to a table.
+// @param dataMatrix (matrix_string) The data to be rendered in a table
+// @param bgColorMatrix (matrix_color) The matching matrix of background colors to use. 
+// @param textColorMatrix (matrix_color) The matching matrix of text colors to use. 
+// @param position (string) Optional. The position of the table. Defaults to position.top_right
+// @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
+// @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
+// @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
+// @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
+// @param tableNumRows (int) Optional. The number of rows in the table. Not required, defaults to the number of rows in the provided matrix. If your matrix will have a variable number of rows, you must provide the max number of rows or the function will error when it attempts to set a cell value on a row that the table hadn't accounted for when it was defined.
+export fromMatrix(matrix<string> dataMatrix, matrix<color> bgColorMatrix, matrix<color> textColorMatrix, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, string blankCellText = "", int tableNumRows = -1) => 
+	if (barstate.islast)
+		matrix<string> _dataMatrix = transposeTable ? matrix.transpose(dataMatrix) : dataMatrix
+		matrix<color> _bgColorMatrix = transposeTable ? matrix.transpose(bgColorMatrix) : bgColorMatrix
+		matrix<color> _textColorMatrix = transposeTable ? matrix.transpose(textColorMatrix) : textColorMatrix
+		int columns = matrix.columns(_dataMatrix)
+		
+		// If the table is supposed to be offset from it's top or bottom, add rows to create the displacement
+		bool isBottom = position == position.bottom_left or position == position.bottom_center or position == position.bottom_right
+		bool isTop = position == position.top_left or position == position.top_center or position == position.top_right
+		if (verticalOffset > 0)
+			transparentColor = color.rgb(255,255,255,100)
+			matrix<string> blankRows = matrix.new<string>(verticalOffset, columns, blankCellText)
+			matrix<color> blankBgColorRows = matrix.new<color>(verticalOffset, columns, transparentColor)
+			matrix<color> blankTextColorRows = matrix.new<color>(verticalOffset, columns, transparentColor)
+			if (isTop)
+				_dataMatrix := matrix.concat(blankRows, _dataMatrix)
+				_bgColorMatrix := matrix.concat(blankBgColorRows, _bgColorMatrix)
+				_textColorMatrix := matrix.concat(blankTextColorRows, _textColorMatrix)
+			else if (isBottom)
+				_dataMatrix := matrix.concat(_dataMatrix, blankRows)
+				_bgColorMatrix := matrix.concat(_bgColorMatrix, blankBgColorRows)
+				_textColorMatrix := matrix.concat(_textColorMatrix, blankTextColorRows)	
+
+		dataText = ""
+		mergeArray = array.new_string()
+		int matrixRows = matrix.rows(_dataMatrix)
+        int tableRows = matrixRows > tableNumRows ? matrixRows : tableNumRows
+
+		table matrixTable = table.new(position = position, columns = columns, rows = tableRows, border_width = borderWidth)
+		for i = 0 to matrixRows - 1
+			for j = 0 to columns - 1
+				// Check the data for row & colspan specs
+				dataText := matrix.get(_dataMatrix, i, j)
+				[rowspan, colspan, dataStr] = getRowColData(dataText)
+				// Build a merge array to be merged after table is complete
+				if (rowspan > 1 or colspan > 1)
+					array.push(mergeArray, str.tostring(j) + ":" + str.tostring(i) + ":" + str.tostring(j+colspan-1) + ":" + str.tostring(i+rowspan-1))
+
+				dataText := dataStr
+				table.cell(
+				  matrixTable, 
+				  j, 
+				  i, 
+				  dataText,
+				  text_color=matrix.get(_textColorMatrix, i, j), 
+				  text_size=textSize, 
+				  bgcolor=matrix.get(_bgColorMatrix, i, j)
+				  )
+
+		mergeArraySize = array.size(mergeArray)
+		if (mergeArraySize > 0)
+			for i = 0 to mergeArraySize - 1
+				mergeParts = str.split(array.get(mergeArray, i), ":")
+				if (array.size(mergeParts) == 4)
+					table.merge_cells(
+					  matrixTable, 
+					  math.round(str.tonumber(array.get(mergeParts, 0))), 
+					  math.round(str.tonumber(array.get(mergeParts, 1))), 
+					  math.round(str.tonumber(array.get(mergeParts, 2))), 
+					  math.round(str.tonumber(array.get(mergeParts, 3)))
+					  )
+
+
+// @function Takes two matrixes (one for data, the other for background colors) and converts them to a table.
+// @param dataMatrix (matrix_string) The data to be rendered in a table
+// @param bgColorMatrix (matrix_color) The matching matrix of background colors to use. 
+// @param position (string) Optional. The position of the table. Defaults to position.top_right
+// @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
+// @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
+// @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
+// @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
+// @param textColor (color) Optional. Color to use for all text in the table. Defaults to color.white.
+// @param blankCellText (string) Optional. The text to put in blank cells when adjusting verticalOffset. Defaults to an empty string "".
+export fromMatrix(matrix<string> dataMatrix, matrix<color> bgColorMatrix, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, color textColor = color.white, string blankCellText = "") => 
+	textColorMatrix = matrix.new<color>(matrix.rows(dataMatrix), matrix.columns(dataMatrix), textColor)
+	fromMatrix(dataMatrix, bgColorMatrix, textColorMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, blankCellText)
+
+// @function Takes a matrix of data and converts to a table.
+// @param dataMatrix (matrix_string) The data to be rendered in a table
+// @param position (string) Optional. The position of the table. Defaults to position.top_right
+// @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
+// @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
+// @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
+// @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
+// @param bgColor (color) Optional. Color to use for all backgrounds in the table. Defaults to blue.
+// @param textColor (color) Optional. Color to use for all text in the table. Defaults to color.white.
+// @param blankCellText (string) Optional. The text to put in blank cells when adjusting verticalOffset. Defaults to an empty string "".
+export fromMatrix(matrix<string> dataMatrix, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, color bgColor = #2962ff, color textColor = color.white, string blankCellText = "") => 
+	int rows = matrix.rows(dataMatrix)
+	int cols = matrix.columns(dataMatrix)
+	bgColorMatrix = matrix.new<color>(rows, cols, bgColor)
+	textColorMatrix = matrix.new<color>(rows, cols, textColor)
+	fromMatrix(dataMatrix, bgColorMatrix, textColorMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, blankCellText)
+
+// @function Takes three arrays (data, background color, and text color) and converts them to a table.
+// @param dataArray (array_string) The data to be rendered in a table
+// @param bgColorArray (array_color) The matching array of background colors to use. 
+// @param textColorArray (array_color) The matching array of text colors to use. 
+// @param position (string) Optional. The position of the table. Defaults to position.top_right
+// @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
+// @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
+// @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
+// @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
+// @param blankCellText (string) Optional. The text to put in blank cells when adjusting verticalOffset. Defaults to an empty string "".
+export fromArray(array<string> dataArray, array<color> bgColorArray, array<color> textColorArray, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, string blankCellText = "") =>
+	dataMatrix = matrix.new<string>()
+	bgColorMatrix = matrix.new<color>()
+	textColorMatrix = matrix.new<color>()
+	matrix.add_row(dataMatrix, 0, dataArray)
+	matrix.add_row(bgColorMatrix, 0, bgColorArray)
+	matrix.add_row(textColorMatrix, 0, textColorArray)
+	fromMatrix(dataMatrix, bgColorMatrix, textColorMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, blankCellText)
+
+// @function Takes two arrays (one for data, the other for background colors) and converts them to a table.
+// @param dataArray (array_string) The data to be rendered in a table
+// @param bgColorArray (array_color) The matching array of background colors to use. 
+// @param position (string) Optional. The position of the table. Defaults to position.top_right
+// @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
+// @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
+// @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
+// @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
+// @param textColor (color) Optional. Color to use for all text in the table. Defaults to color.white.
+// @param blankCellText (string) Optional. The text to put in blank cells when adjusting verticalOffset. Defaults to an empty string "".
+export fromArray(array<string> dataArray, array<color> bgColorArray, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, color textColor = color.white, string blankCellText = "") => 
+	dataMatrix = matrix.new<string>()
+	bgColorMatrix = matrix.new<color>()
+	matrix.add_row(dataMatrix, 0, dataArray)
+	matrix.add_row(bgColorMatrix, 0, bgColorArray)
+	fromMatrix(dataMatrix, bgColorMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, textColor, blankCellText)
+
+// @function Takes an array of data and converts to a table.
+// @param dataArray (array_string) The data to be rendered in a table
+// @param position (string) Optional. The position of the table. Defaults to position.top_right
+// @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
+// @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
+// @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
+// @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
+// @param bgColor (color) Optional. Color to use for all backgrounds in the table. Defaults to blue.
+// @param textColor (color) Optional. Color to use for all text in the table. Defaults to color.white.
+// @param blankCellText (string) Optional. The text to put in blank cells when adjusting verticalOffset. Defaults to an empty string "".
+export fromArray(array<string> dataArray, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, color bgColor = #2962ff, color textColor = color.white, string blankCellText = "") => 
+	dataMatrix = matrix.new<string>()
+	matrix.add_row(dataMatrix, 0, dataArray)
+	fromMatrix(dataMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, bgColor, textColor, blankCellText)
+
+// @function Adds a message to the provided array of debug messages.
+// @param debugArray (array_string) The array of messages to add to.
+// @param message (string) The message to add.
+export debugAdd(string message, array<string>dataArray) =>
+	array.push(dataArray, message)
+
+// @function Renders an array of debug messages in a table at the desired location on screen.
+// @param debugArray (array_string) The array of messages to render.
+// @param position (string) Optional. The position of the debug messages. Defaults to position.middle_right.
+export debugDraw(array<string>debugArray, string position = position.middle_right) =>
+	fromArray(debugArray, position, 0, true)
+
+// @function Renders a debug message in a table at the desired location on screen.
+// @param message (string) The message to render.
+// @param position (string) Optional. The position of the debug message. Defaults to position.middle_right.
+export debug(string message, string position = position.middle_right) =>
+	debugArray = array.new_string()
+	debugAdd(message, debugArray)
+	debugDraw(debugArray, position)
+
+// Experiment #1, build a table of RSI values, changing colors when the rsi is extreme
+
+// Convenience function for adding to the matrices
+getRsiArrays(length) =>
+	rsi = math.round(ta.rsi(close, length))
+	textArray = array.from(str.tostring(length) + "P", str.format("{0,number,#}", rsi))
+	rsiColor = rsi >= 70 or rsi <= 30 ? COLOR_HOT : COLOR_COOL
+	colorArray = array.new_color(2, rsiColor)
+	[textArray, colorArray]
+
+// Build up the matrix to be rendered
+[rsi2TextArray, rsi2ColorArray] = getRsiArrays(2)
+[rsi14TextArray, rsi14ColorArray] = getRsiArrays(14)
+
+dataMatrix = matrix.new<string>()
+matrix.add_row(dataMatrix, 0, rsi2TextArray)
+matrix.add_row(dataMatrix, 1, rsi14TextArray)
+
+bgColorMatrix = matrix.new<color>()
+matrix.add_row(bgColorMatrix, 0, rsi2ColorArray)
+matrix.add_row(bgColorMatrix, 1, rsi14ColorArray)
+
+if barstate.islast
+	fromMatrix(dataMatrix, bgColorMatrix, position.bottom_right)
+
+// Experiment #2, build the multitimeframe rsi table
+rsi = ta.rsi(close, 2)
+rsi1 = request.security(symbol=syminfo.tickerid, timeframe="5", expression=rsi, lookahead=barmerge.lookahead_on)
+rsi2 = request.security(symbol=syminfo.tickerid, timeframe="15", expression=rsi, lookahead=barmerge.lookahead_on)
+rsi3 = request.security(symbol=syminfo.tickerid, timeframe="60", expression=rsi, lookahead=barmerge.lookahead_on)
+
+// Build up the matrix to be rendered
+mtfDataMatrix = matrix.new<string>()
+mtfBgColorMatrix = matrix.new<color>()
+matrix.add_row(mtfDataMatrix, 0, array.from(" RSI "))
+matrix.add_row(mtfBgColorMatrix, 0, array.from(COLOR_HOT))
+
+// Convenience function for adding to the matrices
+addTimeframe(dataMatrix, bgColorMatrix, timeframe, rsi) =>
+	textArray = array.from(" " + Utilities.timeframeToString(timeframe) + " \n " + str.format("{0,number,#}" + " ", rsi))
+	rsiColor = rsi >= 70 or rsi <= 30 ? COLOR_HOT : COLOR_COOL
+	colorArray = array.new_color(1, rsiColor)
+	matrix.add_row(dataMatrix, matrix.rows(dataMatrix), textArray)
+	matrix.add_row(bgColorMatrix, matrix.rows(bgColorMatrix), colorArray)
+
+addTimeframe(mtfDataMatrix, mtfBgColorMatrix, "5", rsi1)
+addTimeframe(mtfDataMatrix, mtfBgColorMatrix, "15", rsi2)
+addTimeframe(mtfDataMatrix, mtfBgColorMatrix, "60", rsi3)
+
+// Add a row that spans all columns
+matrix.add_col(mtfDataMatrix, matrix.columns(mtfDataMatrix), array.from("rowspan:1::colspan:4::This is a single cell of data", "", "", ""))
+matrix.add_col(mtfBgColorMatrix, matrix.columns(mtfBgColorMatrix), array.new_color(4, COLOR_HOT))
+
+if barstate.islast
+	fromMatrix(mtfDataMatrix, mtfBgColorMatrix, position.top_right, 1, true)
+
+// Experiment #3. Writing a collection of debug messages to the screen
+debugArray = array.new_string()
+debugAdd("This is a test", debugArray)
+debugAdd("This is another test", debugArray)
+debugDraw(debugArray, position.top_left)
+
+// Experiment #4. Writing a single debug message to another location on the screen
+debug("This is the last test", position.bottom_left)
