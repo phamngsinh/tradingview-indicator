@@ -1,0 +1,50 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © jmosullivan
+
+// @version=5
+// Created By jmosullivan
+// Nav RSI
+indicator(title="Nav RSI", shorttitle="Nav RSI", format=format.price, precision=2)
+
+import jmosullivan/PrivateTable/5
+
+// Configuration
+grp = "Table Layout"
+position         = input.string      (group=grp, defval=position.middle_right,      title="Position",   options=[position.top_right, position.middle_right, position.middle_left, position.bottom_right, position.bottom_left])
+textsize     = input.string      (group=grp, defval=size.tiny,             title="Text Size",  options=[size.tiny, size.small, size.normal])
+colorExtreme         = input.color       (group=grp, defval=color.rgb(232, 24, 170),  title="Extreme Color")
+colorModerate        = input.color       (group=grp, defval=color.rgb(40, 98, 255), title="Moderate Color")
+
+// Functions
+
+getRsiArrays(length) =>
+	rsi = math.round(ta.rsi(close, length))
+	textArray = array.from(str.tostring(length) + "P", str.format("{0,number,#}", rsi))
+	rsiColor = rsi >= 70 or rsi <= 30 ? colorExtreme : colorModerate
+	colorArray = array.new_color(2, rsiColor)
+	[textArray, colorArray]
+
+// Logic
+
+rsi14 = ta.rsi(close, 14)
+rsi2 = ta.rsi(close, 2)
+plot(rsi14, "RSI", color=colorModerate, linewidth=2)
+plot(rsi2, "Secondary RSI", color=color.new(colorExtreme, 50), linewidth=2)
+rsiUpperBand = hline(70, "RSI Upper Band", color=colorModerate)
+hline(50, "RSI Middle Band", color=color.new(colorModerate, 50))
+rsiLowerBand = hline(30, "RSI Lower Band", color=colorModerate)
+fill(rsiUpperBand, rsiLowerBand, color=color.new(colorModerate, 95), title="RSI Background Fill")
+
+// Build up the matrix to be rendered
+[rsi2TextArray, rsi2ColorArray] = getRsiArrays(2)
+[rsi14TextArray, rsi14ColorArray] = getRsiArrays(14)
+
+dataMatrix = matrix.new<string>()
+matrix.add_row(dataMatrix, 0, rsi2TextArray)
+matrix.add_row(dataMatrix, 1, rsi14TextArray)
+
+bgColorMatrix = matrix.new<color>()
+matrix.add_row(bgColorMatrix, 0, rsi2ColorArray)
+matrix.add_row(bgColorMatrix, 1, rsi14ColorArray)
+
+PrivateTable.fromMatrix(dataMatrix, bgColorMatrix, position, borderWidth=1)
