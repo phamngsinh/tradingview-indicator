@@ -119,6 +119,10 @@ trendToColor(trend) =>
         2 => color.red
         3 => color.gray
         4 => color.fuchsia
+        5 => color.green
+        6 => color.red
+        7 => color.green
+        8 => color.red
         => color.black
 
 getLabelColor(trend) =>
@@ -254,22 +258,23 @@ getLookbackSpan(timeframe) =>
     if (timeframe.isminutes)
         currentTimeframeMinutes = str.tonumber(timeframe.period)
 
-getCorrectPivotTime(pivot, pivotType, lookDistance, timeframe) =>
-    matchIndex = int(na)
-    // timeframe of the pivot divided by the currently viewed timeframe multiplied by twice the lookback (left and right combined)
+// Deprecated
+// getCorrectPivotTime(pivot, pivotType, lookDistance, timeframe) =>
+//     matchIndex = int(na)
+//     // timeframe of the pivot divided by the currently viewed timeframe multiplied by twice the lookback (left and right combined)
 
-    currentTimeframeMinutes = getTimeframeMinutes(timeframe.period)
-    examinedTimeframeMinutes = getTimeframeMinutes(timeframe)
-    if not na(currentTimeframeMinutes) and not na(examinedTimeframeMinutes)
-        max = (examinedTimeframeMinutes / currentTimeframeMinutes) * (lookDistance * 2)
-        i = 0
-        source = pivotType == "High" ? high : low
-        while na(matchIndex) and i <= max
-            if source[i] == pivot
-                matchIndex := i
-            i += 1
+//     currentTimeframeMinutes = getTimeframeMinutes(timeframe.period)
+//     examinedTimeframeMinutes = getTimeframeMinutes(timeframe)
+//     if not na(currentTimeframeMinutes) and not na(examinedTimeframeMinutes)
+//         max = (examinedTimeframeMinutes / currentTimeframeMinutes) * (lookDistance * 2)
+//         i = 0
+//         source = pivotType == "High" ? high : low
+//         while na(matchIndex) and i <= max
+//             if source[i] == pivot
+//                 matchIndex := i
+//             i += 1
 	
-    time[na(matchIndex) ? 0 : matchIndex]
+//     time[na(matchIndex) ? 0 : matchIndex]
 
 // Pivots from request.security don't have accurate times. This looks through the current chart's matrix for the correct time for that pivot
 matrixGetPivotTime(matrix, row, timeframe) =>
@@ -342,6 +347,9 @@ processPivot(pivotMatrix, pivot, pivotType, lookDistance, timeframe, maxRows = 5
 
             processPivotDetail(pivotMatrix, matrixRows)
 
+
+
+// Deprecated
 correctPivotTimes(pivotMatrix) =>
     matrixRows = matrix.rows(pivotMatrix)
     if (matrixRows > 0)
@@ -572,15 +580,17 @@ getLastTrend(pivotMatrix, startIndex = -1) =>
 // Placeholder for finding price from parents
 getParentPivot(sourceTimeframe, seekingPivotType, referencePivotPrice) =>
     // Returns pivotPrice, pivotTime, pivot Timeframe
-    [-1, -1, 5]
+    [-1, -1, "60"]
 
 // Check to see if there are any fresh prices that negate the pivot analysis in the matrix
 getFreshTrend(timeframe, pivotMatrix) => 
     freshTrend = float(na)
     scoutTimeframe = timeframe
-    scoutType = float(na)
+    scoutType = string(na)
     scoutPrice = float(na)
     scoutTime = float(na)
+    lastHigh = float(na)
+    lastLow = float(na)
     pivotRows = matrix.rows(pivotMatrix)
     if pivotRows > 2
         pivotPrice = matrixGet(pivotMatrix, pivotRows-1, "pivotPrice")
@@ -606,6 +616,7 @@ getFreshTrend(timeframe, pivotMatrix) =>
                 // Pattern is now a trend change bear
                 freshTrend := trendToNumber("Trend Change Bear")
                 // Scouting a fresh low above something??
+                scoutType := "Lower Low"
 // TODO: THIs reference price being passed in is incorrect. Need to determine which price to use depending on which condition landed us here
 // in the if statement above here                
                 [scoutPrice, scoutTime, scoutTimeframe] = getParentPivot(timeframe, 0, lastPivotPrice)
@@ -618,6 +629,7 @@ getFreshTrend(timeframe, pivotMatrix) =>
                 // Pattern is now a trend change bull
                 freshTrend := trendToNumber("Trend Change Bull")
                 // Scouting a fresh high below something??
+                scoutType := "Higher High"
 // TODO: THIs reference price being passed in is incorrect. Need to determine which price to use depending on which condition landed us here
 // in the if statement above here                
                 [scoutPrice, scoutTime, scoutTimeframe] = getParentPivot(timeframe, 1, lastPivotPrice)
@@ -625,8 +637,8 @@ getFreshTrend(timeframe, pivotMatrix) =>
         else if trend == trendToNumber("Consolidating")
             // Get last trend
             [lastTrend, lastTrendCount] = getLastTrend(pivotMatrix)
-            lastHigh = pivotType == 1 ? pivotPrice : lastPivotPrice
-            lastLow =pivotType == 0 ? pivotPrice : lastPivotPrice
+            lastHigh := pivotType == 1 ? pivotPrice : lastPivotPrice
+            lastLow := pivotType == 0 ? pivotPrice : lastPivotPrice
             // If last trend was bullish
             if lastTrend == trendToNumber("Up")
                 // if price has just broken above the last high
@@ -634,10 +646,12 @@ getFreshTrend(timeframe, pivotMatrix) =>
                     freshTrend := trendToNumber("Continuation Bull")
                     // Loop through all parents for any highs above current price
                     // Scout for price to set a higher high below one of those levels
+                    scoutType := "Higher High"
                     [scoutPrice, scoutTime, scoutTimeframe] = getParentPivot(timeframe, 1, lastHigh)
                 
                 // if price has just broken down below the last low
-                if close < lastLow
+                else if close < lastLow
+                    scoutType := "Lower Low"
                     freshTrend := trendToNumber("Trend Change Bear")
                     // Loop through all parents for any lows below current price
                     // scout for price to set a lower low above one of those levels
@@ -647,13 +661,15 @@ getFreshTrend(timeframe, pivotMatrix) =>
             else if lastTrend == trendToNumber("Down")
                 // if price has just broken above the last high
                 if close > lastHigh
+                    scoutType := "Higher High"
                     freshTrend := trendToNumber("Trend Change Bull")
                     // loop through all parents for any highs above current price
                     // scout a higher high below the last resistance
                     [scoutPrice, scoutTime, scoutTimeframe] = getParentPivot(timeframe, 1, lastHigh)
 
                 // if price has just broken down below the last low
-                if close < lastLow
+                else if close < lastLow
+                    scoutType := "Lower Low"
                     freshTrend := trendToNumber("Continuation Bear")
                     // loop through all parents looking for any  lows below current price
                     // scout a lower low above the last support
@@ -716,7 +732,7 @@ getStandardTrend(timeframe, pivotMatrix) =>
         // HH/LL - Megaphone
         else if trend == trendToNumber("Megaphone")
             // Get last trend
-            lastTrend = getLastTrend(pivotMatrix)
+            [lastTrend, lastTrendCount] = getLastTrend(pivotMatrix)
             // If last trend was bullish
             if lastTrend == trendToNumber("Up")
                 // If just set a lower low
@@ -767,28 +783,65 @@ getStandardTrend(timeframe, pivotMatrix) =>
 
     [scoutTimeframe, scoutType, scoutPrice, scoutTime]
 
-getTrendScout(timeframe, pivotMatrix) =>
-    pivotRows = matrix.rows(pivotMatrix)
-    if pivotRows > 0
-        // pivotPrice = matrixGet(pivotMatrix, pivotRows-1, "pivotPrice")
-        pivotType = matrixGet(pivotMatrix, pivotRows-1, "pivotType")
-        // isHigher = matrixGet(pivotMatrix, pivotRows-1, "isHigher")
-        // lastPriceDistance = matrixGet(pivotMatrix, pivotRows-1, "priceDistance")
-        // distanceMA = matrixGet(pivotMatrix, pivotRows-1, "distanceMA")
-        // lastMoveStrength = (lastPriceDistance * 100) / distanceMA
-        // lastPercentInRange = matrixGet(pivotMatrix, pivotRows-1, "percentInRange")
-        trend = matrixGet(pivotMatrix, pivotRows-1, "trend")
-        freshTrend = getFreshTrend(timeframe, pivotMatrix)
-        // trendCount = matrixGet(pivotMatrix, pivotRows-1, "trendCount")
-        // currPriceDistance = math.abs(pivotPrice - close)
-        // currMoveStrength = (currPriceDistance * 100) / distanceMA
-        // currPercentInRange = currPriceDistance * 100 / lastPriceDistance
+drawTrendTable() =>
+    if (barstate.islast)
+        dataMatrix = matrix.new<string>()
+        // Timeframe, Trend (Strength/Number of Moves), Last Pivot Was, Currently Scouting a, where (above [tf] support / below [tf] resistance), at price, Current Fib Level, Current Health of Move
+        columnArray = array.from(
+           "Timeframe", // 15
+           "Trend (# Moves)", // Up (4)
+           "Last Pivot Was a", // Lower High
+           "Scouting a", // 4h Higher Low
+           "at", // above
+           "Price", // 5.45
+           "Fib %",
+           "Health" // Healthy, Extended
+           )
+        matrix.add_row(dataMatrix, 0, columnArray)
+        colorMatrix = matrix.new<color>()
+        columnCount = array.size(columnArray)
+        matrix.add_row(colorMatrix, 0, array.new_color(columnCount, color.blue))
 
-        // If there were no fresh trends from current price, continue with standard trend
-        if na(freshTrend)
+        // Variables for looping
+        scoutTrend = float(na)
+        scoutTrendCount = float(0)
+        scoutTimeframe = string(na)
+        scoutType = string(na)
+        scoutPrice = float(na)
+        scoutTime = float(na)
+        percentInRange = float(na)
 
+        // Loop through each matrix transferring the last (most recent) row to a table
+        for i = array.size(timeframeArray) - 1 to 0
+            timeframe = array.get(timeframeArray, i)
+            pivotMatrix = getMatrixByTimeframe(timeframe)
+            pivotRows = matrix.rows(pivotMatrix)
+            if (pivotRows > 0)
+                [scoutTrend, scoutTimeframe, scoutType, scoutPrice, scoutTime] = getFreshTrend(timeframe, pivotMatrix)
+                pivotType = matrixGet(pivotMatrix, pivotRows-1, "pivotType")
+                isHigher = matrixGet(pivotMatrix, pivotRows-1, "isHigher")
+                priceDistance = matrixGet(pivotMatrix, pivotRows-1, "priceDistance")
+                if na(scoutTrend)
+                    [scoutTimeframe, scoutType, scoutPrice, scoutTime] = getStandardTrend(timeframe, pivotMatrix)
+                    scoutTrend := matrixGet(pivotMatrix, pivotRows-1, "trend")
+                    scoutTrendCount := matrixGet(pivotMatrix, pivotRows-1, "trendCount")
+                    percentInRange := matrixGet(pivotMatrix, pivotRows-1, "percentInRange")
+                
+                matrix.add_row(dataMatrix, matrix.rows(dataMatrix), array.from(
+                   getTimeframeEnglish(timeframe),
+                   str.format("{0} ({1,number,#})", trendToString(scoutTrend), scoutTrendCount),
+                   (isHigher ? "Higher " : "Lower ") + (pivotType == 1 ? "High" : "Low"),
+                   getTimeframeEnglish(scoutTimeframe) + " " + scoutType,
+                   scoutType == "Higher High" or scoutType == "Lower High" ? "below" : "above",
+                   str.tostring(scoutPrice, format.mintick),
+                   na(percentInRange) ? str.tostring(percentInRange, format.mintick) : "-",
+                   "Healthy?"
+                   ))
 
+                // matrix.add_row(colorMatrix, matrix.rows(colorMatrix), array.new_color(columnCount, trendToColor(scoutTrend)))
 
+        if matrix.rows(dataMatrix) > 1
+            PrivateTable.fromMatrix(dataMatrix, colorMatrix, position=position.bottom_left, borderWidth=1)
 
 
 drawSummaryTable() => 
@@ -1010,15 +1063,16 @@ if (tfIndex >= 0)
         definePivotsByTimeframe(timeframe)
         if x < 3
             pColor = array.get(colors, x)
-            drawPivotLines(timeframe, pColor, width=x+1, maxLines=maxLines)
+            // drawPivotLines(timeframe, pColor, width=x+1, maxLines=maxLines)
             // drawPivotAreas(timeframe, pColor, maxAreas = math.round(maxLines/2))
-            drawFinalLabel(timeframe)
+            // drawFinalLabel(timeframe)
             // if (i == 2)
             //     drawPivotLabels(timeframe)
             maxLines := maxLines / 2
             x += 1
     
-    drawSummaryTable()
+    // drawSummaryTable()
+    drawTrendTable()
     // drawScoutLabel() 
 
 // if (barstate.islast and array.size(pDebug) > 0)
