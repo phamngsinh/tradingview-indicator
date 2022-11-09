@@ -5,7 +5,6 @@
 // Stairstep
 
 indicator(title='Stairstep', shorttitle="SS", overlay=true)
-import jmosullivan/Utilities/8
 
 min_candles = input.int(5, 'Minimum Consecutive Candles', 3, 10, 1, tooltip="The minimum number of consecutive candles that represent a stairstep pattern.")
 txtsize = input.string(defval=size.small, title="Text Size",  options=[size.tiny, size.small, size.normal])
@@ -17,13 +16,51 @@ clr_txt_ib = input.color(color.yellow, 'IB Text', 'Colors of the label/text when
 clr_lbl_br = input.color(color.rgb(1, 95, 35), 'Break Label', inline="2")
 clr_txt_br = input.color(color.rgb(96, 245, 0), 'Text', 'Colors of the label/text when stairstep breaks', inline="2")
 
-doLabel(direction, len) =>
+// Apparently you can't assign high, low, open, close to a variable and then still access their history index. 
+// This function allows me to get around that...
+getHistoryValue(direction, index) =>
+    ret = direction == 'Up' ? low[index] : high[index]
+    ret
+
+isLastCandleGoingInDirection(direction, index) =>
+    movingInDirection = (direction == 'Up' and getHistoryValue(direction, index+1) <= getHistoryValue(direction, index)) or (direction == 'Down' and getHistoryValue(direction, index+1) >= getHistoryValue(direction, index))
+    movingInDirection
+
+getStairstep(direction, length) => 
+    breaking = isLastCandleGoingInDirection(direction, 0) ? false : true
+
+    steps = 1
+    curr = false
+    i = steps
+    while isLastCandleGoingInDirection(direction, i) and i < 40
+        i := i + 1
+        steps := steps + 1
+
+    trending = steps >= length - 1
+    ret = trending ? breaking ? -1 : steps + 1 : 0
+    ret
+
+// Should be used as an expression to request.security
+get_inside_bar_count() => 
+    ib_count = 0
+    i = 0
+    maxLoops = 10
+    while i <= maxLoops
+        if (high[i+1] > high[i] and low[i+1] < low[i])
+            ib_count := ib_count + 1
+            i := i + 1
+        else
+            i := maxLoops + 1
+
+    ib_count
+
+drawLabel(direction, len) =>
     if (barstate.islast)
-        ss = Utilities.getStairstep(direction, len)
+        ss = getStairstep(direction, len)
         ss_break = ss == -1
         yloc = ss_break ? direction == 'Down' ? high[1] : low[1] : close
         // is_ib = high <= high[1] and low >= low[1]
-        ib_count = Utilities.getInsideBarCount()
+        ib_count = get_inside_bar_count()
         txt_ss = txtlen == "Words" ? "Stairstep" : "SS"
         txt_ib = txtlen == "Words" ? "x Inside Bar" : "xIB"
         txt_dn = txtlen == "Words" ? "Down" : "▼"
@@ -43,5 +80,5 @@ doLabel(direction, len) =>
         if (ss == 0)
             label.delete(l[0])
 
-doLabel('Down', min_candles)
-doLabel('Up', min_candles)
+drawLabel('Down', min_candles)
+drawLabel('Up', min_candles)

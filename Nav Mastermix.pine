@@ -6,8 +6,8 @@ indicator("Nav Mastermix", shorttitle="Nav MMX", overlay=true)
 
 // 1. Yellow inside bars
 barcolor((high <= high[1] and low >= low[1]) ? color.yellow : na)
-insideBarClosed = high[1] <= high[2] and low[1] >= low[2]
-alertcondition(insideBarClosed, title="Inside Bar", message="{{exchange}}:{{ticker}} {{interval}} Inside Bar")
+insideBarClosed = session.ismarket and high[1] <= high[2] and low[1] >= low[2]
+alertcondition(insideBarClosed, title="Inside Bar", message="{{ticker}} {{interval}} Inside Bar")
 
 // 2. Price Pivots
 ph = ta.pivothigh(3, 3)
