@@ -43,13 +43,18 @@ show3  = input.bool(defval=true, title="", inline="tf3", group=grp2)
 show4  = input.bool(defval=true, title="", inline="tf4", group=grp2)
 show5  = input.bool(defval=true, title="", inline="tf5", group=grp2)
 show6  = input.bool(defval=true, title="", inline="tf6", group=grp2)
-tfToolTip = "The number values represent minutes, so 60 = 1 hour, 120 = 2 hours, 180 = 3 hours, 240 = 4 hours, 1440 = 12 hours, D = 1 day, W = 1 week, M = 1 month. Alert conditions based on these values are stacked, so for the alerts to begin firing, at a minimum the first 3 rsi timeframes defined must all be >= 70 or <= 30 together. For every additional RSI value to join the group beyond the first three, you will get a different superstack level alert, eg: first 3 = Superstack 3; first 4 = Superstack 4; first 5 = Superstack 5; all 6 = Superstack 6."
+tfToolTip = "The number values represent minutes, so 60 = 1 hour, 120 = 2 hours, 180 = 3 hours, 240 = 4 hours, 1440 = 12 hours, D = 1 day, W = 1 week, M = 1 month. Alert conditions based on these values are stacked, so for the alerts to begin firing, at a minimum the first 3 RSI timeframes defined must all be >= 70 or <= 30 together. For every additional RSI value to join the group beyond the first three, you will get a different superstack level alert, eg: first 3 = Superstack 3; first 4 = Superstack 4; first 5 = Superstack 5; all 6 = Superstack 6."
 timeframe1 = input.timeframe(defval="5", title="", inline="tf1", group=grp2, tooltip=tfToolTip, options=["1", "3", "5", "15", "30", "45", "60", "120", "180", "240", "1440", "D", "W", "M"])
 timeframe2 = input.timeframe(defval="15", title="", inline="tf2", group=grp2, tooltip=tfToolTip, options=["1", "3", "5", "15", "30", "45", "60", "120", "180", "240", "1440", "D", "W", "M"])
 timeframe3 = input.timeframe(defval="60", title="", inline="tf3", group=grp2, tooltip=tfToolTip, options=["1", "3", "5", "15", "30", "45", "60", "120", "180", "240", "1440", "D", "W", "M"])
 timeframe4 = input.timeframe(defval="240", title="", inline="tf4", group=grp2, tooltip=tfToolTip, options=["1", "3", "5", "15", "30", "45", "60", "120", "180", "240", "1440", "D", "W", "M"])
 timeframe5 = input.timeframe(defval="D", title="", inline="tf5", group=grp2, tooltip=tfToolTip, options=["1", "3", "5", "15", "30", "45", "60", "120", "180", "240", "1440", "D", "W", "M"])
 timeframe6 = input.timeframe(defval="W", title="", inline="tf6", group=grp2, tooltip=tfToolTip, options=["1", "3", "5", "15", "30", "45", "60", "120", "180", "240", "1440", "D", "W", "M"])
+
+grp3   = "Superstack Alerts"
+ssToolTip = "Superstack alerts are triggered when 3 or more consecutive timeframes (starting from the first one) reach oversold or overbought together. "
+showSuperstackBreadcrumbs = input.bool(defval=false, title="Show arrow icon breadcrumbs on chart when superstack conditions are met.", tooltip=ssToolTip + "Breadcrumbs are a bit messy, cluttering up the chart, but they are useful for seeing when things began and ended on the chart historically.", group=grp3)
+showSuperstackLabels = input.bool(defval=true, title="Show label on chart when superstack conditions are met.", tooltip=ssToolTip + " The labels only appear when a superstack is active and disappear when it is finished.", group=grp3)
 
 // Arrays to be built up by the indicator
 dataArray = array.new_string()
@@ -89,6 +94,21 @@ addTimeframe(timeframe, rsi, show) =>
         array.push(bgColorArray, bgColor)
         array.push(textColorArray, textColor)
 
+drawLabel(ssLevel) =>
+    if (barstate.islast and showSuperstackLabels)
+        ssBreak = ssLevel == 0
+        yloc = ssBreak ? close : ssLevel > 0 ? high : low
+        txt = str.format("Superstack {0}: {1}", ssLevel > 0 ? "Overbought" : "Oversold", math.abs(ssLevel))
+        clr = ssLevel > 0 ? color.red : color.green
+        style = ssLevel > 0 ? label.style_label_lower_left : label.style_label_upper_left,
+        l = label.new(x=bar_index[0]+1, y=yloc, text=txt, style=style, color=clr, textcolor=color.white, size=size.small)
+        // Delete older labels (only have the latest one on the last candle)
+        label.delete(l[1])
+
+        // Delete the current one if there's no stairstep and no break
+        if (ssLevel == 0)
+            label.delete(l[0])
+
 // Logic
 
 rsi = ta.rsi(close, length)
@@ -121,12 +141,12 @@ if barstate.islast
 	    PrivateTable.fromArray(dataArray, bgColorArray, textColorArray, position, verticalOffset, false, textSize, 2, "\n")
 
 // Alert Conditions
-overbought1 = rsi1 >= 70 and show1
-overbought2 = rsi2 >= 70 and show2
-overbought3 = rsi3 >= 70 and show3
-overbought4 = rsi4 >= 70 and show4
-overbought5 = rsi5 >= 70 and show5
-overbought6 = rsi6 >= 70 and show6
+overbought1 = rsi1 >= 70
+overbought2 = rsi2 >= 70
+overbought3 = rsi3 >= 70
+overbought4 = rsi4 >= 70
+overbought5 = rsi5 >= 70
+overbought6 = rsi6 >= 70
 oversold1 = rsi1 <= 30 and show1
 oversold2 = rsi2 <= 30 and show2
 oversold3 = rsi3 <= 30 and show3
@@ -155,3 +175,34 @@ alertcondition(superstackOb3 or superstackOs3, title="Superstack: 3 Overbought/O
 alertcondition(superstackOb4 or superstackOs4, title="Superstack: 4 Overbought/Oversold", message="{{exchange}}:{{ticker}} Superstack: 4 timeframes overbought or oversold")
 alertcondition(superstackOb5 or superstackOs5, title="Superstack: 5 Overbought/Oversold", message="{{exchange}}:{{ticker}} Superstack: 5 timeframes overbought or oversold")
 alertcondition(superstackOb6 or superstackOs6, title="Superstack: 6 Overbought/Oversold", message="{{exchange}}:{{ticker}} Superstack: 6 timeframes overbought or oversold")
+
+// Alert Visuals
+plotshape(showSuperstackBreadcrumbs and superstackOb3 and not superstackOb4, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.tiny)
+plotshape(showSuperstackBreadcrumbs and superstackOb4 and not superstackOb5, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+plotshape(showSuperstackBreadcrumbs and superstackOb5 and not superstackOb6, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.normal)
+plotshape(showSuperstackBreadcrumbs and superstackOb6, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.large)
+plotshape(showSuperstackBreadcrumbs and superstackOs3 and not superstackOs4, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.tiny)
+plotshape(showSuperstackBreadcrumbs and superstackOs4 and not superstackOs5, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(showSuperstackBreadcrumbs and superstackOs5 and not superstackOs6, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.normal)
+plotshape(showSuperstackBreadcrumbs and superstackOs6, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.large)
+
+alertLabel = string(na)
+superstackLevel = 0
+if superstackOb3
+    superstackLevel := 3
+if superstackOb4
+    superstackLevel := 4
+if superstackOb5
+    superstackLevel := 5
+if superstackOb6
+    superstackLevel := 6
+if superstackOs3
+    superstackLevel := -3
+if superstackOs4
+    superstackLevel := -4
+if superstackOs5
+    superstackLevel := -5
+if superstackOs6
+    superstackLevel := -6
+
+drawLabel(superstackLevel)
