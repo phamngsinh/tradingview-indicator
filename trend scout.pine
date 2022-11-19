@@ -21,6 +21,7 @@ var pivot4hMatrix = matrix.new<float>()
 var pivot1dMatrix = matrix.new<float>()
 var pivot1wMatrix = matrix.new<float>()
 var pivot1MMatrix = matrix.new<float>()
+var chartMatrix = matrix.new<float>()
 
 var labelArray = array.new<label>()
 var lineArray = array.new<line>()
@@ -52,7 +53,7 @@ getMatrixByTimeframe(tf) =>
         "D" => pivot1dMatrix
         "W" => pivot1wMatrix
         "M" => pivot1MMatrix
-        => matrix.new<float>()
+        => chartMatrix
 
 requestSecurity(timeframe, expression) =>
     request.security(syminfo.tickerid, timeframe, expression)
@@ -93,7 +94,6 @@ definePivotsByTimeframe(timeframe) =>
         // Use the current chart's pivots
         pivotHigh := PrivateTA.pivotHigh(lookbackBars)
         pivotLow := PrivateTA.pivotLow(lookbackBars)
-
 
     PrivateTA.processPivot(pivotMatrix, pivotHigh, "High", lookbackBars, maxRows=maxRows)
     PrivateTA.processPivot(pivotMatrix, pivotLow, "Low", lookbackBars, maxRows=maxRows)
@@ -419,7 +419,8 @@ getTrend(chartMatrix) =>
 
         // Loop through each matrix transferring the last (most recent) row to a table
         doTrend = string(na)
-        validMatrixCount = 0
+        // If the current timeframe isn't in the timeframe array, include it in the valid count so the correct parents are found
+        validMatrixCount = array.includes(timeframeArray, timeframe.period) ? 0 : 1
         for i = 0 to array.size(timeframeArray) - 1
             timeframe = array.get(timeframeArray, i)
             pivotMatrix = getMatrixByTimeframe(timeframe)
@@ -544,6 +545,7 @@ for i = 0 to array.size(timeframeArray) - 1
 // Draw the full table
 if barstate.islast
     chartMatrix = getMatrixByTimeframe(timeframe.period)
+    array.push(d, str.tostring(matrix.rows(chartMatrix)))
     getTrend(chartMatrix)
     if debugMode
         PrivateTable.fromArray(d, transposeTable = true, position=position.bottom_right)
