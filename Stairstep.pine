@@ -1,78 +1,39 @@
 // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 // © jmosullivan
 // @version=5
-// Created By jmosullivan
-// Stairstep
 
 indicator(title='Stairstep', shorttitle="SS", overlay=true)
+import jmosullivan/Utilities/16
 
-min_candles = input.int(5, 'Minimum Consecutive Candles', 3, 10, 1, tooltip="The minimum number of consecutive candles that represent a stairstep pattern.")
-txtsize = input.string(defval=size.small, title="Text Size",  options=[size.tiny, size.small, size.normal])
-txtlen = input.string(defval="Words", title="Label Text", options=["Words", "Abbreviations"], tooltip="Show full words (Stairstep, Inside Bar) on the label, or abbreviations (SS, IB)")
-show_numbers = input.bool(defval=true, title="Show # of Stairsteps")
-clr_lbl_ss = input.color(color.rgb(232, 24, 170), 'Label', inline="1")
-clr_txt_ss = input.color(color.white, 'Text', inline="1")
-clr_txt_ib = input.color(color.yellow, 'IB Text', 'Colors of the label/text when stairstepping', inline="1")
-clr_lbl_br = input.color(color.rgb(1, 95, 35), 'Break Label', inline="2")
-clr_txt_br = input.color(color.rgb(96, 245, 0), 'Text', 'Colors of the label/text when stairstep breaks', inline="2")
+minCandles = input.int(5, 'Minimum Consecutive Candles', 3, 10, 1, tooltip="The minimum number of consecutive candles that represent a stairstep pattern.")
+textSize = input.string(defval=size.small, title="Text Size",  options=[size.tiny, size.small, size.normal])
+textType = input.string(defval="Words", title="Label Text", options=["Words", "Abbreviations"], tooltip="Show full words (Stairstep, Inside Bar) on the label, or abbreviations (SS, IB)")
+showNumbers = input.bool(defval=true, title="Show # of Stairsteps")
+stairstepLabelColor = input.color(color.rgb(232, 24, 170), 'Label', inline="1")
+stairstepTextColor = input.color(color.white, 'Text', inline="1")
+insideBarTextColor = input.color(color.yellow, 'IB Text', 'Colors of the label/text when stairstepping', inline="1")
+breakLabelColor = input.color(color.rgb(1, 95, 35), 'Break Label', inline="2")
+breakTextColor = input.color(color.rgb(96, 245, 0), 'Text', 'Colors of the label/text when stairstep breaks', inline="2")
 
-// Apparently you can't assign high, low, open, close to a variable and then still access their history index. 
-// This function allows me to get around that...
-getHistoryValue(direction, index) =>
-    ret = direction == 'Up' ? low[index] : high[index]
-    ret
-
-isLastCandleGoingInDirection(direction, index) =>
-    movingInDirection = (direction == 'Up' and getHistoryValue(direction, index+1) <= getHistoryValue(direction, index)) or (direction == 'Down' and getHistoryValue(direction, index+1) >= getHistoryValue(direction, index))
-    movingInDirection
-
-getStairstep(direction, length) => 
-    breaking = isLastCandleGoingInDirection(direction, 0) ? false : true
-
-    steps = 1
-    curr = false
-    i = steps
-    while isLastCandleGoingInDirection(direction, i) and i < 40
-        i := i + 1
-        steps := steps + 1
-
-    trending = steps >= length - 1
-    ret = trending ? breaking ? -1 : steps + 1 : 0
-    ret
-
-// Should be used as an expression to request.security
-get_inside_bar_count() => 
-    ib_count = 0
-    i = 0
-    maxLoops = 10
-    while i <= maxLoops
-        if (high[i+1] > high[i] and low[i+1] < low[i])
-            ib_count := ib_count + 1
-            i := i + 1
-        else
-            i := maxLoops + 1
-
-    ib_count
-
-drawLabel(direction, len) =>
+doLabel(direction, len) =>
     if (barstate.islast)
-        ss = getStairstep(direction, len)
-        ss_break = ss == -1
-        yloc = ss_break ? direction == 'Down' ? high[1] : low[1] : close
+        ss = Utilities.getStairstep(direction, len)
+        ssBreak = ss == -1
+        yloc = ssBreak ? direction == 'Down' ? high[1] : low[1] : close
         // is_ib = high <= high[1] and low >= low[1]
-        ib_count = get_inside_bar_count()
-        txt_ss = txtlen == "Words" ? "Stairstep" : "SS"
-        txt_ib = txtlen == "Words" ? "x Inside Bar" : "xIB"
-        txt_dn = txtlen == "Words" ? "Down" : "▼"
-        txt_up = txtlen == "Words" ? "Up" : "▲"
-        txt = txt_ss + ' ' + (direction == "Up" ? txt_up : txt_dn) + (ss_break ? ' Break' : '')
-        if (show_numbers and ss_break == false)
-            txt := str.tostring(ss) + " " + txt
-        if (ib_count > 0)
-            txt := txt + ', ' + str.tostring(ib_count) + txt_ib
-        clr = ss == -1 ? clr_lbl_br : clr_lbl_ss
-        txt_clr = ss == -1 ? clr_txt_br : ib_count > 0 ? clr_txt_ib : clr_txt_ss
-        l = label.new(x=bar_index[0]+1, y=yloc, text=txt, style=label.style_label_left, color=clr, textcolor=txt_clr, size=txtsize)
+        ibCount = Utilities.getInsideBarCount()
+        textStairStep = textType == "Words" ? "Stairstep" : "SS"
+        textInsideBar = textType == "Words" ? "x Inside Bar" : "xIB"
+        txtDown = textType == "Words" ? "Down" : "▼"
+        txtUp = textType == "Words" ? "Up" : "▲"
+        labelText = textStairStep + ' ' + (direction == "Up" ? txtUp : txtDown) + (ssBreak ? ' Break' : '')
+        if (showNumbers and ssBreak == false)
+            labelText := str.tostring(ss) + " " + labelText
+        if (ibCount > 0)
+            labelText := labelText + ', ' + str.tostring(ibCount) + textInsideBar
+        labelColor = ss == -1 ? breakLabelColor : stairstepLabelColor
+        textColor = ss == -1 ? breakTextColor : ibCount > 0 ? insideBarTextColor : stairstepTextColor
+        l = label.new(x=bar_index[0]+1, y=yloc, text=labelText, style=label.style_label_left, color=labelColor, textcolor=textColor, size=textSize)
         // Delete older labels (only have the latest one on the last candle)
         label.delete(l[1])
 
@@ -80,5 +41,5 @@ drawLabel(direction, len) =>
         if (ss == 0)
             label.delete(l[0])
 
-drawLabel('Down', min_candles)
-drawLabel('Up', min_candles)
+doLabel('Down', minCandles)
+doLabel('Up', minCandles)

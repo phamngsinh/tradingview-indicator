@@ -18,11 +18,12 @@ grp = "Layout"
 topOffset = input.int(group=grp, defval=0, title="Top Offset", options=[0, 1, 2, 3])
 showTitle = input.bool(group=grp, defval=true, title="Show Title")
 position = input.string(group=grp, defval=position.bottom_right, title="Position", options=[position.top_right, position.bottom_right, position.bottom_left])
-textSize = input.string(group=grp, defval=size.small, title="Text Size", options=[size.tiny, size.small, size.normal, size.large])
+textSize = input.string(group=grp, defval=size.tiny, title="Text Size", options=[size.tiny, size.small, size.normal, size.large])
 colorExtreme = input.color(group=grp, defval=COLOR_EXTREME, title="Extreme Color")
 colorModerate = input.color(group=grp, defval=COLOR_MODERATE, title="Moderate Color")
 length = input.int(group=grp, defval=30, title="Vol MA Length")
-transpose = input.bool(group=grp, defval=true, title="Vertical Table")
+transpose = input.bool(group=grp, defval=false, title="Vertical Table")
+showChartData = input.bool(group=grp, defval=false, title="Show Active Chart Data")
 
 // Functions
 
@@ -37,21 +38,12 @@ formatNumber(num) =>
         ret := str.format("{0,number,#.#}", n) + "M"
     ret
 
-addRow(dataArray, bgColorArray, label, vol, volMovingAverage) =>
+addRow(dataMatrix, bgMatrix, label, vol, volMovingAverage) =>
     rvol = vol/volMovingAverage
     isExtreme = rvol >= 1
-    // Add the label
-    array.push(dataArray, label)
-    array.push(bgColorArray, colorModerate)
-    // Add the average vol
-    array.push(dataArray, formatNumber(volMovingAverage))
-    array.push(bgColorArray, colorModerate)
-    // Add the current vol
-    array.push(dataArray, formatNumber(vol))
-    array.push(bgColorArray, isExtreme ? colorExtreme : colorModerate)
-    // Add the rvol
-    array.push(dataArray, str.format("{0,number,#.#}", rvol))
-    array.push(bgColorArray, isExtreme ? colorExtreme : colorModerate)
+    clr = isExtreme ? colorExtreme : colorModerate
+    matrix.add_row(dataMatrix, matrix.rows(dataMatrix), array.from(label, formatNumber(volMovingAverage), formatNumber(vol), str.format("{0,number,#.#}", rvol)))
+    matrix.add_row(bgMatrix, matrix.rows(bgMatrix), array.from(colorModerate, colorModerate, clr, clr))
 
 // Logic
 
@@ -60,23 +52,15 @@ dailyVolume = request.security(syminfo.tickerid, "D", volume)
 dailyVolumeMa = request.security(syminfo.tickerid, "D", ta.sma(volume, length))
 
 if barstate.islast
-    titleArray = array.from("", "AVG", "CUR", "RVOL")
-    titleBgColorArray = array.from(COLOR_TRANSPARENT, colorModerate, colorModerate, colorModerate)
-    chartArray = array.new_string()
-    chartBgColorArray = array.new_color()
-    dailyArray = array.new_string()
-    dailyBgColorArray = array.new_color()
-
-    addRow(chartArray, chartBgColorArray, "Chart", volume, chartVolumeMa)
-    addRow(dailyArray, dailyBgColorArray, "1D", dailyVolume, dailyVolumeMa)
-
     dataMatrix = matrix.new<string>()
-    matrix.add_row(dataMatrix, 0, titleArray)
-    matrix.add_row(dataMatrix, 1, chartArray)
-    matrix.add_row(dataMatrix, 2, dailyArray)
     bgMatrix = matrix.new<color>()
-    matrix.add_row(bgMatrix, 0, titleBgColorArray)
-    matrix.add_row(bgMatrix, 1, chartBgColorArray)
-    matrix.add_row(bgMatrix, 2, dailyBgColorArray)
+    if showTitle
+        matrix.add_row(dataMatrix, 0, array.from("", "AVG", "CUR", "RVOL"))
+        matrix.add_row(bgMatrix, 0, array.from(COLOR_TRANSPARENT, colorModerate, colorModerate, colorModerate))
 
-    PrivateTable.fromMatrix(dataMatrix, bgMatrix, position, textSize=textSize)
+    if showChartData
+        addRow(dataMatrix, bgMatrix, "Chart", volume, chartVolumeMa)
+
+    addRow(dataMatrix, bgMatrix, "1D", dailyVolume, dailyVolumeMa)
+
+    PrivateTable.fromMatrix(dataMatrix, bgMatrix, position, textSize=textSize, transposeTable=transpose)

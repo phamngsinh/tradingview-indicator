@@ -55,20 +55,38 @@ export floatMatrixToString(matrix<float> floatMatrix) =>
 
 // @function Takes three matrixes (data, background color, and text color) and converts them to a table.
 // @param dataMatrix (matrix_string) The data to be rendered in a table
-// @param bgColorMatrix (matrix_color) The matching matrix of background colors to use. 
-// @param textColorMatrix (matrix_color) The matching matrix of text colors to use. 
+// @param bgColorMatrix (matrix_color) Optional. The matching matrix of background colors to use. If this is not provided, defaultBgColor will be used.
+// @param textColorMatrix (matrix_color) Optional. The matching matrix of text colors to use. If this is not provided, defaultTextColor will be used.
 // @param position (string) Optional. The position of the table. Defaults to position.top_right
 // @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
 // @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
 // @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
 // @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
 // @param tableNumRows (int) Optional. The number of rows in the table. Not required, defaults to the number of rows in the provided matrix. If your matrix will have a variable number of rows, you must provide the max number of rows or the function will error when it attempts to set a cell value on a row that the table hadn't accounted for when it was defined.
-export fromMatrix(matrix<string> dataMatrix, matrix<color> bgColorMatrix, matrix<color> textColorMatrix, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, string blankCellText = "", int tableNumRows = -1) => 
+// @param defaultBgColor (color) Optional. The table cell background color to use if bgColorMatrix is not provided. Defaults to color.blue.
+// @param defaultTextColor (color) Optional. The table cell text color to use if textColorMatrix is not provided. Defaults to color.white.
+export fromMatrix(matrix<string> dataMatrix, matrix<color> bgColorMatrix = na, matrix<color> textColorMatrix = na, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, string blankCellText = "", int tableNumRows = -1, color defaultBgColor=color.blue, color defaultTextColor=color.white) => 
 	if (barstate.islast)
-		matrix<string> _dataMatrix = transposeTable ? matrix.transpose(dataMatrix) : dataMatrix
-		matrix<color> _bgColorMatrix = transposeTable ? matrix.transpose(bgColorMatrix) : bgColorMatrix
-		matrix<color> _textColorMatrix = transposeTable ? matrix.transpose(textColorMatrix) : textColorMatrix
-		int columns = matrix.columns(_dataMatrix)
+		matrix<string> _dataMatrix = dataMatrix
+		matrix<color> _bgColorMatrix = bgColorMatrix
+		matrix<color> _textColorMatrix = textColorMatrix
+		int rows = matrix.rows(dataMatrix)
+		int columns = matrix.columns(dataMatrix)
+
+		// Perform some validation to make sure we have all the things we need
+		if na(_bgColorMatrix)
+			_bgColorMatrix := matrix.new<color>(rows, columns, defaultBgColor)
+
+		if na(_textColorMatrix)
+			_textColorMatrix := matrix.new<color>(rows, columns, defaultTextColor)
+
+		if transposeTable
+			_dataMatrix := matrix.transpose(_dataMatrix)
+			_bgColorMatrix := matrix.transpose(_bgColorMatrix)
+			_textColorMatrix := matrix.transpose(_textColorMatrix)
+
+		rows := matrix.rows(_dataMatrix)
+		columns := matrix.columns(_dataMatrix)
 		
 		// If the table is supposed to be offset from it's top or bottom, add rows to create the displacement
 		bool isBottom = position == position.bottom_left or position == position.bottom_center or position == position.bottom_right
@@ -126,88 +144,41 @@ export fromMatrix(matrix<string> dataMatrix, matrix<color> bgColorMatrix, matrix
 					  math.round(str.tonumber(array.get(mergeParts, 3)))
 					  )
 
-
-// @function Takes two matrixes (one for data, the other for background colors) and converts them to a table.
-// @param dataMatrix (matrix_string) The data to be rendered in a table
-// @param bgColorMatrix (matrix_color) The matching matrix of background colors to use. 
+// @function Takes three matrixes (data, background color, and text color) and converts them to a table.
+// @param dataMatrix (matrix_float) The data to be rendered in a table
+// @param bgColorMatrix (matrix_color) Optional. The matching matrix of background colors to use. If this is not provided, defaultBgColor will be used.
+// @param textColorMatrix (matrix_color) Optional. The matching matrix of text colors to use. If this is not provided, defaultTextColor will be used.
 // @param position (string) Optional. The position of the table. Defaults to position.top_right
 // @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
 // @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
 // @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
 // @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
-// @param textColor (color) Optional. Color to use for all text in the table. Defaults to color.white.
-// @param blankCellText (string) Optional. The text to put in blank cells when adjusting verticalOffset. Defaults to an empty string "".
-export fromMatrix(matrix<string> dataMatrix, matrix<color> bgColorMatrix, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, color textColor = color.white, string blankCellText = "") => 
-	textColorMatrix = matrix.new<color>(matrix.rows(dataMatrix), matrix.columns(dataMatrix), textColor)
-	fromMatrix(dataMatrix, bgColorMatrix, textColorMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, blankCellText)
-
-// @function Takes a matrix of data and converts to a table.
-// @param dataMatrix (matrix_string) The data to be rendered in a table
-// @param position (string) Optional. The position of the table. Defaults to position.top_right
-// @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
-// @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
-// @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
-// @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
-// @param bgColor (color) Optional. Color to use for all backgrounds in the table. Defaults to blue.
-// @param textColor (color) Optional. Color to use for all text in the table. Defaults to color.white.
-// @param blankCellText (string) Optional. The text to put in blank cells when adjusting verticalOffset. Defaults to an empty string "".
-export fromMatrix(matrix<string> dataMatrix, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, color bgColor = #2962ff, color textColor = color.white, string blankCellText = "") => 
-	int rows = matrix.rows(dataMatrix)
-	int cols = matrix.columns(dataMatrix)
-	bgColorMatrix = matrix.new<color>(rows, cols, bgColor)
-	textColorMatrix = matrix.new<color>(rows, cols, textColor)
-	fromMatrix(dataMatrix, bgColorMatrix, textColorMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, blankCellText)
+// @param tableNumRows (int) Optional. The number of rows in the table. Not required, defaults to the number of rows in the provided matrix. If your matrix will have a variable number of rows, you must provide the max number of rows or the function will error when it attempts to set a cell value on a row that the table hadn't accounted for when it was defined.
+// @param defaultBgColor (color) Optional. The table cell background color to use if bgColorMatrix is not provided. Defaults to color.blue.
+// @param defaultTextColor (color) Optional. The table cell text color to use if textColorMatrix is not provided. Defaults to color.white.
+export fromMatrix(matrix<float> dataMatrix, matrix<color> bgColorMatrix = na, matrix<color> textColorMatrix = na, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, string blankCellText = "", int tableNumRows = -1, color defaultBgColor=color.blue, color defaultTextColor=color.white) => 
+	fromMatrix(floatMatrixToString(dataMatrix), bgColorMatrix, textColorMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, blankCellText, tableNumRows, defaultBgColor, defaultTextColor)
 
 // @function Takes three arrays (data, background color, and text color) and converts them to a table.
 // @param dataArray (array_string) The data to be rendered in a table
-// @param bgColorArray (array_color) The matching array of background colors to use. 
-// @param textColorArray (array_color) The matching array of text colors to use. 
+// @param bgColorArray (array_color) Optional. The matching array of background colors to use. 
+// @param textColorArray (array_color) Optional. The matching array of text colors to use. 
 // @param position (string) Optional. The position of the table. Defaults to position.top_right
 // @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
 // @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
 // @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
 // @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
 // @param blankCellText (string) Optional. The text to put in blank cells when adjusting verticalOffset. Defaults to an empty string "".
-export fromArray(array<string> dataArray, array<color> bgColorArray, array<color> textColorArray, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, string blankCellText = "") =>
+// @param defaultBgColor (color) Optional. The table cell background color to use if bgColorMatrix is not provided. Defaults to color.blue.
+// @param defaultTextColor (color) Optional. The table cell text color to use if textColorMatrix is not provided. Defaults to color.white.
+export fromArray(array<string> dataArray, array<color> bgColorArray = na, array<color> textColorArray = na, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, string blankCellText = "", color defaultBgColor=color.blue, color defaultTextColor=color.white) => 
 	dataMatrix = matrix.new<string>()
 	bgColorMatrix = matrix.new<color>()
 	textColorMatrix = matrix.new<color>()
 	matrix.add_row(dataMatrix, 0, dataArray)
-	matrix.add_row(bgColorMatrix, 0, bgColorArray)
-	matrix.add_row(textColorMatrix, 0, textColorArray)
+	matrix.add_row(bgColorMatrix, 0, na(bgColorArray) ? array.new_color(array.size(dataArray), defaultBgColor) : bgColorArray)
+	matrix.add_row(textColorMatrix, 0, na(textColorArray) ? array.new_color(array.size(dataArray), defaultTextColor) : textColorArray)
 	fromMatrix(dataMatrix, bgColorMatrix, textColorMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, blankCellText)
-
-// @function Takes two arrays (one for data, the other for background colors) and converts them to a table.
-// @param dataArray (array_string) The data to be rendered in a table
-// @param bgColorArray (array_color) The matching array of background colors to use. 
-// @param position (string) Optional. The position of the table. Defaults to position.top_right
-// @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
-// @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
-// @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
-// @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
-// @param textColor (color) Optional. Color to use for all text in the table. Defaults to color.white.
-// @param blankCellText (string) Optional. The text to put in blank cells when adjusting verticalOffset. Defaults to an empty string "".
-export fromArray(array<string> dataArray, array<color> bgColorArray, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, color textColor = color.white, string blankCellText = "") => 
-	dataMatrix = matrix.new<string>()
-	bgColorMatrix = matrix.new<color>()
-	matrix.add_row(dataMatrix, 0, dataArray)
-	matrix.add_row(bgColorMatrix, 0, bgColorArray)
-	fromMatrix(dataMatrix, bgColorMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, textColor, blankCellText)
-
-// @function Takes an array of data and converts to a table.
-// @param dataArray (array_string) The data to be rendered in a table
-// @param position (string) Optional. The position of the table. Defaults to position.top_right
-// @param verticalOffset (int) Optional. The vertical offset of the table from the top or bottom of the chart. Defaults to 0.
-// @param transposeTable (bool) Optional. Will transpose all of the data in the matrices before rendering. Defaults to false. 
-// @param textSize (string) Optional. The size of text to render in the table. Defaults to size.small.
-// @param borderWidth (int) Optional. The width of the border between table cells. Defaults to 2.
-// @param bgColor (color) Optional. Color to use for all backgrounds in the table. Defaults to blue.
-// @param textColor (color) Optional. Color to use for all text in the table. Defaults to color.white.
-// @param blankCellText (string) Optional. The text to put in blank cells when adjusting verticalOffset. Defaults to an empty string "".
-export fromArray(array<string> dataArray, string position = position.top_right, int verticalOffset = 0, bool transposeTable = false, string textSize = size.small, int borderWidth = 2, color bgColor = #2962ff, color textColor = color.white, string blankCellText = "") => 
-	dataMatrix = matrix.new<string>()
-	matrix.add_row(dataMatrix, 0, dataArray)
-	fromMatrix(dataMatrix, position, verticalOffset, transposeTable, textSize, borderWidth, bgColor, textColor, blankCellText)
 
 // @function Adds a message to the provided array of debug messages.
 // @param debugArray (array_string) The array of messages to add to.
@@ -219,7 +190,7 @@ export debugAdd(string message, array<string>dataArray) =>
 // @param debugArray (array_string) The array of messages to render.
 // @param position (string) Optional. The position of the debug messages. Defaults to position.middle_right.
 export debugDraw(array<string>debugArray, string position = position.middle_right) =>
-	fromArray(debugArray, position, 0, true)
+	fromArray(debugArray, position=position, verticalOffset=0, transposeTable=true)
 
 // @function Renders a debug message in a table at the desired location on screen.
 // @param message (string) The message to render.
@@ -227,7 +198,7 @@ export debugDraw(array<string>debugArray, string position = position.middle_righ
 export debug(string message, string position = position.middle_right) =>
 	debugArray = array.new_string()
 	debugAdd(message, debugArray)
-	debugDraw(debugArray, position)
+	debugDraw(debugArray, position=position)
 
 // Experiment #1, build a table of RSI values, changing colors when the rsi is extreme
 
@@ -251,8 +222,7 @@ bgColorMatrix = matrix.new<color>()
 matrix.add_row(bgColorMatrix, 0, rsi2ColorArray)
 matrix.add_row(bgColorMatrix, 1, rsi14ColorArray)
 
-if barstate.islast
-	fromMatrix(dataMatrix, bgColorMatrix, position.bottom_right)
+fromMatrix(dataMatrix, bgColorMatrix, position=position.bottom_right)
 
 // Experiment #2, build the multitimeframe rsi table
 rsi = ta.rsi(close, 2)
@@ -282,8 +252,7 @@ addTimeframe(mtfDataMatrix, mtfBgColorMatrix, "60", rsi3)
 matrix.add_col(mtfDataMatrix, matrix.columns(mtfDataMatrix), array.from("rowspan:1::colspan:4::This is a single cell of data", "", "", ""))
 matrix.add_col(mtfBgColorMatrix, matrix.columns(mtfBgColorMatrix), array.new_color(4, COLOR_HOT))
 
-if barstate.islast
-	fromMatrix(mtfDataMatrix, mtfBgColorMatrix, position.top_right, 1, true)
+fromMatrix(mtfDataMatrix, mtfBgColorMatrix, position=position.top_right, verticalOffset=1, transposeTable=true)
 
 // Experiment #3. Writing a collection of debug messages to the screen
 debugArray = array.new_string()

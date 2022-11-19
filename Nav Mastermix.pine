@@ -37,5 +37,12 @@ if (timeframe.isminutes or timeframe.isseconds)
     first15 := time(timeframe.period, "0930-0945:23456")
     first30 := time(timeframe.period, "0945-1000:23456")
 
-bgcolor(first15 ? color.rgb(178, 255, 160, 50) : na)
-bgcolor(first30 ? color.rgb(202, 255, 190, 60) : na)
+bgcolor(first15 ? color.rgb(254, 57, 87, 70) : na)
+bgcolor(first30 ? color.rgb(254, 57, 87, 80) : na)
+
+// 6. Highlight 2 hrs in (2hrs after open, tops/bottoms should be set
+int highsOrLowsSet = na
+if (timeframe.isminutes or timeframe.isseconds)
+    highsOrLowsSet := time(timeframe.period, "1130-1131:23456")
+
+bgcolor(highsOrLowsSet ? color.rgb(178, 255, 160, 0) : na)

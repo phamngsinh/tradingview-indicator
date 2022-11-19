@@ -39,14 +39,14 @@ export getLabelStyleFromString(string styleString, bool acceptGivenIfNoMatch = t
 
 // @function Draw a label after the last bar. 
 // @param show (bool) Should the label show or not?
-// @param labelStyle (string) One of: label.style_label*
+// @param labelStyle (string) One of: label.style_label* or "transparent". If "transparent", textColor value will be inverted with the label color (and label color will become transparent).
 // @param x (int) Bar index on the x-axis
 // @param y (float) Price on the y-axis
 // @param labelText (string) Label text
 // @param textSize (string) One of size.* values
 // @param labelColor (color) Color of the label background
-// @param textColor (color) Color of the text within the label. Defaults to color.white. This value will be inverted with the label color (and label color will become transparent) if labelStyle is None.
-export drawLabel(bool show, string labelStyle, int x, float y, string labelText, string textSize, color labelColor, color textColor = color.white) =>
+// @param textColor (color) Color of the text within the label. Defaults to color.white.
+export drawLabel(int x, float y, string labelText, bool show = true, string labelStyle = label.style_label_left, string textSize = size.small, color labelColor = color.blue, color textColor = color.white, string xloc=xloc.bar_index) =>
     var label lbl = na
     label.delete(lbl)
     if (show and labelStyle != "No Labels")
@@ -54,11 +54,12 @@ export drawLabel(bool show, string labelStyle, int x, float y, string labelText,
         _labelColor = labelColor
         _textColor = textColor
         _labelStyle = getLabelStyleFromString(labelStyle)
-        if (_labelStyle == label.style_none)
+        if (_labelStyle == "transparent")
+            _labelStyle := label.style_none
             _labelColor := color.rgb(0,0,0,100) // Make the label background transparent
             _textColor := labelColor // Make the text the color of the label background
 
-        lbl := label.new(x=x, y=y, text=labelText, style=_labelStyle, color=_labelColor, textcolor=_textColor, size=textSize, textalign=text.align_left)
+        lbl := label.new(x=x, y=y, xloc=xloc, text=labelText, style=_labelStyle, color=_labelColor, textcolor=_textColor, size=textSize, textalign=text.align_left)
 
 // @function Draw a horizontal line.
 // @param show (bool) Should the line and label show or not?
@@ -67,7 +68,7 @@ export drawLabel(bool show, string labelStyle, int x, float y, string labelText,
 // @param lineStyle (string) One of line.style_*
 // @param lineWidth (int) Width of the line
 // @param lineColor (color) Color of the line
-export drawLine(bool show, int x, float y, string lineStyle, int lineWidth, color lineColor) =>
+export drawLine(int x, float y, string lineStyle = line.style_solid, int lineWidth = 1, color lineColor = color.blue, bool show = true) =>
     var line ln = na
     line.delete(ln)
     if (show)
@@ -84,14 +85,14 @@ export drawLine(bool show, int x, float y, string lineStyle, int lineWidth, colo
 // @param labelText (string) Label text
 // @param textSize (string) One of size.* values
 // @param textColor (color) Color of the text within the label. Defaults to color.white. This value will be inverted with the label color (and label color will become transparent) if labelPosition is one of the "Text Above" options.
-export drawLineAndLabel(bool show, string labelStyle, int x, float y, string lineStyle, int lineWidth, color lineAndLabelColor, string labelText, string textSize, color textColor = color.white) =>
-    drawLine(show, x, y, lineStyle, lineWidth, lineAndLabelColor)
-    drawLabel(show, labelStyle, x, y, labelText, textSize, lineAndLabelColor, textColor)
+export drawLineAndLabel(int x, float y, string labelText, string labelStyle = label.style_label_left, string lineStyle = line.style_solid, int lineWidth = 1, color lineAndLabelColor = color.blue, string textSize = size.small, color textColor = color.white, bool show = true) =>
+    drawLine(show=show, x=x, y=y, lineStyle=lineStyle, lineWidth=lineWidth, lineColor=lineAndLabelColor)
+    drawLabel(show=show, labelStyle=labelStyle, x=x, y=y, labelText=labelText, textSize=textSize, labelColor=lineAndLabelColor, textColor=textColor)
 
 // @function Write a debug message to the screen after the last candle
 // @param txt (string) the message to write
 export debug(string txt) =>
-    drawLabel(true, label.style_label_left, bar_index + 3, ta.highest(10)[1], txt, size.normal, color.blue, color.white)
+    drawLabel(show=true, labelStyle=label.style_label_left, x=bar_index + 3, y=ta.highest(10)[1], labelText=txt, textSize=size.normal, labelColor=color.blue, textColor=color.white)
 
 // @function Convenience function. I found that if I assigned a built-in series to a variable in the function scope, it didn't retain it's history. This function allows me to work around that.
 // @param direction (string) "Up" or "Down"
@@ -169,22 +170,6 @@ export getLevelBetweenTimes(string highOrLow, int start, int end) =>
         reset := true
     ret
 
-// @function Get the # of seconds for the current chart's timeframe
-// @returns (int) The integer value in seconds of that timeframe
-export timeframeOfChartToInt() =>
-    int rtf = 0
-    if (timeframe.isseconds)
-        rtf := timeframe.multiplier
-    if (timeframe.isminutes)
-        rtf := timeframe.multiplier * 60
-    if (timeframe.isdaily)
-        rtf := timeframe.multiplier * 60 * 60 * 24
-    if (timeframe.isweekly)
-        rtf := timeframe.multiplier * 60 * 60 * 24 * 7
-    if (timeframe.ismonthly)
-        rtf := timeframe.multiplier * 60 * 60 * 24 * 30
-    rtf
-
 // @function Get the timeframe of the current chart
 // @returns (string) The string of the current chart timeframe
 export timeframeOfChart() =>
@@ -197,36 +182,6 @@ export timeframeOfChart() =>
         rtf := rtf + "w"
     if (timeframe.ismonthly)
         rtf := rtf + "m"
-    rtf
-
-// @function Get the # of seconds in a given timeframe. Used for comparisons.
-// @param tf timeframe
-// @returns (int) The integer value in seconds of that timeframe
-export timeframeToInt(string tf) =>
-    int rtf = switch tf
-    	"1" => 60
-    	"2" => 120
-    	"3" => 180
-    	"5" => 300
-    	"10" => 600
-    	"13" => 780
-    	"15" => 900
-    	"30" => 1800
-    	"45" => 2700
-    	"60" => 3600
-    	"120" => 7200
-    	"180" => 10800
-    	"240" => 14400
-    	"360" => 21600
-    	"480" => 28800
-    	"720" => 43200
-    	"1D" => 86400
-    	"D" => 86400
-    	"1W" => 604800
-    	"W" => 604800
-    	"1M" => 2592000
-    	"M" => 2592000
-    	=> 1 // default
     rtf
 
 // @function Convert a timeframe string to a consistent standard.
@@ -254,3 +209,40 @@ export timeframeToString(string tf) =>
     	"M" => "1M"
     	=> tf // default
     rtf
+
+// @function Get the # of seconds in a given timeframe. Tradingview's timeframe.in_seconds() expects a simple string, and we often need to use series string, so this is an alternative to get you the value you need.
+// @param tf timeframe
+// @returns (int) The number of secondsof that timeframe
+export timeframeInSeconds(string timeframe) =>
+    sMinute = 60
+    sHour = sMinute * 60
+    sDay = sHour * 24
+    sWeek = sDay * 7
+    sMonth = timeframe.in_seconds("M") // TV has a weird value for this, so I'm just using theirs
+    letter = str.substring(timeframe, str.length(timeframe) - 1)
+    multiplier = switch letter
+        "M" => sMonth
+        "W" => sWeek
+        "D" => sDay
+        "H" => sHour
+        => sMinute
+
+    number = int(str.tonumber(timeframe))
+    increment = na(number) ? 1 : number
+    increment * multiplier
+
+// @function Pads a label string so that it appears properly in or not in a label. When label.style_none is used, this will make sure it is left-aligned instead of center-aligned. When any other type is used, it adds a single space to the right so there is padding against the right end of the label.
+// @param labelText (string) The string to be padded
+// @param labelStyle (string) The style of the label being padded for.
+// @returns (string) The padded string
+export padLabelString(string labelText, string labelStyle) =>
+    SPACE = " "
+    returnString = labelText
+    _labelStyle = getLabelStyleFromString(labelStyle)
+    if _labelStyle == label.style_none
+        for i = 0 to str.length(labelText)
+            returnString := SPACE + returnString
+    else
+        returnString := returnString + SPACE
+
+    returnString

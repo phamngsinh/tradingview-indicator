@@ -1,0 +1,174 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © jmosullivan
+
+// Credit to @abdomi for the RSI Levels script, which inspired this one. That script only allows you to see RSI levels for your 
+// current timeframe on your current timeframe. 
+
+//@version=5
+indicator("MTF RSI Levels", overlay=true)
+
+import jmosullivan/Utilities/16
+
+// Configuration
+grpMain = "Global Line Settings"
+doOverBought = input.bool(group=grpMain, defval=true, title="Show overbought RSIs")
+doOverSold = input.bool(group=grpMain, defval=true, title="Show oversold RSIs")
+length = input(group=grpMain, defval=14, title="RSI length")
+showLabels = input.bool(group=grpMain, defval=true, title="Show labels")
+labelStyle = input.string(group=grpMain, defval="Left", title="Label style", options=["Left", "Plain Text"], tooltip="The style of the label. If 'Plain Text' is chosen, the text color input below will be ignored, and the text will be the same color as the line.")
+labelTextSize = input.string(group=grpMain, defval=size.small, title="Label text size", options=[size.auto, size.tiny, size.small, size.normal, size.large, size.huge])
+labelOffset = input.int(group=grpMain, defval=2, title="Label offset", minval=0, maxval=100, tooltip="How far to the right from the last bar on the chart should the label appear?")
+showPrice = input.bool(group=grpMain, defval=true, title="Show price on the labels", tooltip="Include the price of the level in the label before the text.")
+useAbbreviations = input.bool(group=grpMain, defval=false, title="Use abbreviations on labels", tooltip="If checked, the labels will show 'OB' instead of 'Overbought' and 'OS' instead of 'Oversold'.")
+doLines = input.bool(group=grpMain, defval=false, title="Use horizontal lines", tooltip="By default the price levels will appear as plotted lines. Choosing 'Use Horizontal Lines' will instead show a solid horizontal line at the current price level.")
+lineStyle = input.string(group=grpMain, defval="Solid", title="Line style", options=["Solid", "Dashed", "Dotted"], tooltip="The style of the 'Horizontal' line, if checked above.")
+
+grp   = "RSI Level Appearance"
+rsiTooltip = "For each RSI, check the box if it should be shown, then choose the timeframe, line/label color, text color, and line width.\n\nIf you chose 'Plain Text' above next to Label style, the label background will disappear and the text will be the same color as the line (this is helpful if you don't like the big bulky labels that TradingView provides). If you instead chose 'Left', you can use the label and text color inputs to customize the appearance of the label for this RSI level."
+show1  = input.bool(defval=true, title="", inline="tf1", group=grp)
+show2  = input.bool(defval=true, title="", inline="tf2", group=grp)
+show3  = input.bool(defval=true, title="", inline="tf3", group=grp)
+show4  = input.bool(defval=false, title="", inline="tf4", group=grp)
+show5  = input.bool(defval=false, title="", inline="tf5", group=grp)
+show6  = input.bool(defval=false, title="", inline="tf6", group=grp)
+tf1    = input.timeframe(defval="5",   title="", inline="tf1", group=grp)
+tf2    = input.timeframe(defval="15",  title="", inline="tf2", group=grp)
+tf3    = input.timeframe(defval="60",  title="", inline="tf3", group=grp)
+tf4    = input.timeframe(defval="240", title="", inline="tf4", group=grp)
+tf5    = input.timeframe(defval="720", title="", inline="tf5", group=grp)
+tf6    = input.timeframe(defval="D",   title="", inline="tf6", group=grp)
+color1 = input.color(defval=color.rgb(255, 161, 238),  title="", inline="tf1", group=grp)
+color2 = input.color(defval=color.rgb(255, 104, 211), title="", inline="tf2", group=grp)
+color3 = input.color(defval=color.rgb(255, 68, 199),  title="", inline="tf3", group=grp)
+color4 = input.color(defval=color.rgb(255, 26, 188),  title="", inline="tf4", group=grp)
+color5 = input.color(defval=color.rgb(222, 22, 164),  title="", inline="tf5", group=grp)
+color6 = input.color(defval=color.rgb(192, 19, 141), title="", inline="tf6", group=grp)
+textColor1 = input.color(defval=color.white, title="", inline="tf1", group=grp)
+textColor2 = input.color(defval=color.white, title="", inline="tf2", group=grp)
+textColor3 = input.color(defval=color.white, title="", inline="tf3", group=grp)
+textColor4 = input.color(defval=color.white, title="", inline="tf4", group=grp)
+textColor5 = input.color(defval=color.white, title="", inline="tf5", group=grp)
+textColor6 = input.color(defval=color.white, title="", inline="tf6", group=grp)
+lineWidth1 = input.int(defval=1, title="", options=[1,2,3,4], inline="tf1", group=grp, tooltip=rsiTooltip)
+lineWidth2 = input.int(defval=1, title="", options=[1,2,3,4], inline="tf2", group=grp, tooltip=rsiTooltip)
+lineWidth3 = input.int(defval=1, title="", options=[1,2,3,4], inline="tf3", group=grp, tooltip=rsiTooltip)
+lineWidth4 = input.int(defval=1, title="", options=[1,2,3,4], inline="tf4", group=grp, tooltip=rsiTooltip)
+lineWidth5 = input.int(defval=1, title="", options=[1,2,3,4], inline="tf5", group=grp, tooltip=rsiTooltip)
+lineWidth6 = input.int(defval=1, title="", options=[1,2,3,4], inline="tf6", group=grp, tooltip=rsiTooltip)
+labelColor1 = labelStyle != "Plain Text" ? color1 : color.new(color.white, 100)
+labelColor2 = labelStyle != "Plain Text" ? color2 : color.new(color.white, 100)
+labelColor3 = labelStyle != "Plain Text" ? color3 : color.new(color.white, 100)
+labelColor4 = labelStyle != "Plain Text" ? color4 : color.new(color.white, 100)
+labelColor5 = labelStyle != "Plain Text" ? color5 : color.new(color.white, 100)
+labelColor6 = labelStyle != "Plain Text" ? color6 : color.new(color.white, 100)
+textColor1 := labelStyle != "Plain Text" ? textColor1 : color1
+textColor2 := labelStyle != "Plain Text" ? textColor2 : color2
+textColor3 := labelStyle != "Plain Text" ? textColor3 : color3
+textColor4 := labelStyle != "Plain Text" ? textColor4 : color4
+textColor5 := labelStyle != "Plain Text" ? textColor5 : color5
+textColor6 := labelStyle != "Plain Text" ? textColor6 : color6
+
+// If showing horizontal lines and also not showing the label background, reposition the labels so they are above the lines.
+labelStyle1 = doLines and labelStyle == "Plain Text" ? label.style_none : label.style_label_left
+labelStyle2 = doLines and labelStyle == "Plain Text" ? label.style_none : label.style_label_left
+labelStyle3 = doLines and labelStyle == "Plain Text" ? label.style_none : label.style_label_left
+labelStyle4 = doLines and labelStyle == "Plain Text" ? label.style_none : label.style_label_left
+labelStyle5 = doLines and labelStyle == "Plain Text" ? label.style_none : label.style_label_left
+labelStyle6 = doLines and labelStyle == "Plain Text" ? label.style_none : label.style_label_left
+
+tfStr(price, tf, overBoughtOrSold, labelStyle) =>
+    labelText = overBoughtOrSold
+    if not useAbbreviations
+        labelText := labelText == "OB" ? "Overbought" : "Oversold"
+
+    prefix = showPrice ? str.tostring(price, format.mintick) + ": " : ""
+    Utilities.padLabelString(prefix + Utilities.timeframeToString(tf) + " " + labelText, labelStyle)
+
+requestSecurityProxy(_tickerid, _timeframe, _expression) => 
+    request.security(_tickerid, _timeframe, _expression, lookahead=barmerge.lookahead_on)
+
+requestSecurityLower(tickerid, timeframe, expression) =>
+    _timeframe = timeframe.in_seconds('') < timeframe.in_seconds(timeframe) ? '' : timeframe
+    array<float> lowerTimeframeArray = request.security_lower_tf(syminfo.tickerid, _timeframe, expression)
+    array.size(lowerTimeframeArray) > 0 ? array.get(lowerTimeframeArray, array.size(lowerTimeframeArray) - 1) : na
+
+requestSecurity(tickerid, timeframe, expression) =>
+    timeframe.in_seconds('') < timeframe.in_seconds(timeframe) ? requestSecurityProxy(tickerid, timeframe, expression) : requestSecurityLower(tickerid, timeframe, expression)
+
+// Function to do the plotting (adapted from abdomi's script)
+rsiToPlot(tf, rsiLevel, len) =>
+    ep = 2 * len - 1
+    auc = requestSecurity(tickerid=syminfo.tickerid, timeframe=tf, expression=ta.ema(math.max(close - close[1], 0), ep))
+    adc = requestSecurity(tickerid=syminfo.tickerid, timeframe=tf, expression=ta.ema(math.max(close[1] - close, 0), ep))
+    x = (len - 1) * ( adc * rsiLevel / (100 - rsiLevel) - auc)
+    x >= 0 ? close + x : close + x * (100 - rsiLevel) / rsiLevel
+
+// Define the plots
+rsi1_30 = show1 and doOverSold ? rsiToPlot(tf1, 30, length) : na
+rsi1_70 = show1 and doOverBought ? rsiToPlot(tf1, 70, length) : na
+rsi2_30 = show2 and doOverSold ? rsiToPlot(tf2, 30, length) : na
+rsi2_70 = show2 and doOverBought ? rsiToPlot(tf2, 70, length) : na
+rsi3_30 = show3 and doOverSold ? rsiToPlot(tf3, 30, length) : na
+rsi3_70 = show3 and doOverBought ? rsiToPlot(tf3, 70, length) : na
+rsi4_30 = show4 and doOverSold ? rsiToPlot(tf4, 30, length) : na
+rsi4_70 = show4 and doOverBought ? rsiToPlot(tf4, 70, length) : na
+rsi5_30 = show5 and doOverSold ? rsiToPlot(tf5, 30, length) : na
+rsi5_70 = show5 and doOverBought ? rsiToPlot(tf5, 70, length) : na
+rsi6_30 = show6 and doOverSold ? rsiToPlot(tf6, 30, length) : na
+rsi6_70 = show6 and doOverBought ? rsiToPlot(tf6, 70, length) : na
+
+if showLabels
+    os="OS"
+    ob="OB"
+    Utilities.drawLabel(show=show1, x=bar_index[0] + labelOffset, y=rsi1_30, labelText=tfStr(rsi1_30, tf1, os, labelStyle1), textSize=labelTextSize, labelColor=labelColor1, textColor=textColor1, labelStyle=labelStyle1)
+    Utilities.drawLabel(show=show1, x=bar_index[0] + labelOffset, y=rsi1_70, labelText=tfStr(rsi1_70, tf1, ob, labelStyle1), textSize=labelTextSize, labelColor=labelColor1, textColor=textColor1, labelStyle=labelStyle1)
+    Utilities.drawLabel(show=show2, x=bar_index[0] + labelOffset, y=rsi2_30, labelText=tfStr(rsi2_30, tf2, os, labelStyle2), textSize=labelTextSize, labelColor=labelColor2, textColor=textColor2, labelStyle=labelStyle2)
+    Utilities.drawLabel(show=show2, x=bar_index[0] + labelOffset, y=rsi2_70, labelText=tfStr(rsi2_70, tf2, ob, labelStyle2), textSize=labelTextSize, labelColor=labelColor2, textColor=textColor2, labelStyle=labelStyle2)
+    Utilities.drawLabel(show=show3, x=bar_index[0] + labelOffset, y=rsi3_30, labelText=tfStr(rsi3_30, tf3, os, labelStyle3), textSize=labelTextSize, labelColor=labelColor3, textColor=textColor3, labelStyle=labelStyle3)
+    Utilities.drawLabel(show=show3, x=bar_index[0] + labelOffset, y=rsi3_70, labelText=tfStr(rsi3_70, tf3, ob, labelStyle3), textSize=labelTextSize, labelColor=labelColor3, textColor=textColor3, labelStyle=labelStyle3)
+    Utilities.drawLabel(show=show4, x=bar_index[0] + labelOffset, y=rsi4_30, labelText=tfStr(rsi4_30, tf4, os, labelStyle4), textSize=labelTextSize, labelColor=labelColor4, textColor=textColor4, labelStyle=labelStyle4)
+    Utilities.drawLabel(show=show4, x=bar_index[0] + labelOffset, y=rsi4_70, labelText=tfStr(rsi4_70, tf4, ob, labelStyle4), textSize=labelTextSize, labelColor=labelColor4, textColor=textColor4, labelStyle=labelStyle4)
+    Utilities.drawLabel(show=show5, x=bar_index[0] + labelOffset, y=rsi5_30, labelText=tfStr(rsi5_30, tf5, os, labelStyle5), textSize=labelTextSize, labelColor=labelColor5, textColor=textColor5, labelStyle=labelStyle5)
+    Utilities.drawLabel(show=show5, x=bar_index[0] + labelOffset, y=rsi5_70, labelText=tfStr(rsi5_70, tf5, ob, labelStyle5), textSize=labelTextSize, labelColor=labelColor5, textColor=textColor5, labelStyle=labelStyle5)
+    Utilities.drawLabel(show=show6, x=bar_index[0] + labelOffset, y=rsi6_30, labelText=tfStr(rsi6_30, tf6, os, labelStyle6), textSize=labelTextSize, labelColor=labelColor6, textColor=textColor6, labelStyle=labelStyle6)
+    Utilities.drawLabel(show=show6, x=bar_index[0] + labelOffset, y=rsi6_70, labelText=tfStr(rsi6_70, tf6, ob, labelStyle6), textSize=labelTextSize, labelColor=labelColor6, textColor=textColor6, labelStyle=labelStyle6)
+    
+if (doLines)
+    Utilities.drawLine(show=show1, x=bar_index[0] + labelOffset, y=rsi1_30, lineStyle=lineStyle, lineWidth=lineWidth1, lineColor=color1)
+    Utilities.drawLine(show=show1, x=bar_index[0] + labelOffset, y=rsi1_70, lineStyle=lineStyle, lineWidth=lineWidth1, lineColor=color1)
+    Utilities.drawLine(show=show2, x=bar_index[0] + labelOffset, y=rsi2_30, lineStyle=lineStyle, lineWidth=lineWidth2, lineColor=color2)
+    Utilities.drawLine(show=show2, x=bar_index[0] + labelOffset, y=rsi2_70, lineStyle=lineStyle, lineWidth=lineWidth2, lineColor=color2)
+    Utilities.drawLine(show=show3, x=bar_index[0] + labelOffset, y=rsi3_30, lineStyle=lineStyle, lineWidth=lineWidth3, lineColor=color3)
+    Utilities.drawLine(show=show3, x=bar_index[0] + labelOffset, y=rsi3_70, lineStyle=lineStyle, lineWidth=lineWidth3, lineColor=color3)
+    Utilities.drawLine(show=show4, x=bar_index[0] + labelOffset, y=rsi4_30, lineStyle=lineStyle, lineWidth=lineWidth4, lineColor=color4)
+    Utilities.drawLine(show=show4, x=bar_index[0] + labelOffset, y=rsi4_70, lineStyle=lineStyle, lineWidth=lineWidth4, lineColor=color4)
+    Utilities.drawLine(show=show5, x=bar_index[0] + labelOffset, y=rsi5_30, lineStyle=lineStyle, lineWidth=lineWidth5, lineColor=color5)
+    Utilities.drawLine(show=show5, x=bar_index[0] + labelOffset, y=rsi5_70, lineStyle=lineStyle, lineWidth=lineWidth5, lineColor=color5)
+    Utilities.drawLine(show=show6, x=bar_index[0] + labelOffset, y=rsi6_30, lineStyle=lineStyle, lineWidth=lineWidth6, lineColor=color6)
+    Utilities.drawLine(show=show6, x=bar_index[0] + labelOffset, y=rsi6_70, lineStyle=lineStyle, lineWidth=lineWidth6, lineColor=color6)
+
+    rsi1_30 := na
+    rsi1_70 := na
+    rsi2_30 := na
+    rsi2_70 := na
+    rsi3_30 := na
+    rsi3_70 := na
+    rsi4_30 := na
+    rsi4_70 := na
+    rsi5_30 := na
+    rsi5_70 := na
+    rsi6_30 := na
+    rsi6_70 := na
+
+plot(rsi1_30, title="30 RSI Level 1", color=color1, editable=false, linewidth=lineWidth1)
+plot(rsi1_70, title="70 RSI Level 1", color=color1, editable=false, linewidth=lineWidth1)
+plot(rsi2_30, title="30 RSI Level 2", color=color2, editable=false, linewidth=lineWidth2)
+plot(rsi2_70, title="70 RSI Level 2", color=color2, editable=false, linewidth=lineWidth2)
+plot(rsi3_30, title="30 RSI Level 3", color=color3, editable=false, linewidth=lineWidth3)
+plot(rsi3_70, title="70 RSI Level 3", color=color3, editable=false, linewidth=lineWidth3)
+plot(rsi4_30, title="30 RSI Level 4", color=color4, editable=false, linewidth=lineWidth4)
+plot(rsi4_70, title="70 RSI Level 4", color=color4, editable=false, linewidth=lineWidth4)
+plot(rsi5_30, title="30 RSI Level 5", color=color5, editable=false, linewidth=lineWidth5)
+plot(rsi5_70, title="70 RSI Level 5", color=color5, editable=false, linewidth=lineWidth5)
+plot(rsi6_30, title="30 RSI Level 6", color=color6, editable=false, linewidth=lineWidth6)
+plot(rsi6_70, title="70 RSI Level 6", color=color6, editable=false, linewidth=lineWidth6)
