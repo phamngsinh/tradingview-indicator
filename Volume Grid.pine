@@ -8,6 +8,7 @@
 indicator(title='Volume Grid', overlay=true, scale=scale.none)
 
 import jmosullivan/PrivateTable/5
+import jmosullivan/Utilities/24
 
 var COLOR_MODERATE = color.rgb(40, 98, 255)
 var COLOR_EXTREME = color.rgb(232, 24, 170)
@@ -38,29 +39,50 @@ formatNumber(num) =>
         ret := str.format("{0,number,#.#}", n) + "M"
     ret
 
-addRow(dataMatrix, bgMatrix, label, vol, volMovingAverage) =>
-    rvol = vol/volMovingAverage
+addRow(dataMatrix, bgMatrix, label, pmVol, vol, volMovingAverage) =>
+    // Kludge: During premarket, TV treats today as yesterday and premarket as part of that.
+    // After premarket, it starts volume all over again as a fresh number from zero, so we combine the 
+    // two for a more accurate representation of the volume on the day that includes premarket volume. 
+    _vol = vol
+    _pmVol = pmVol
+    if (session.ispremarket)
+        _vol := pmVol
+    else
+        _vol += pmVol
+
+    rvol = _vol/volMovingAverage
     isExtreme = rvol >= 1
     clr = isExtreme ? colorExtreme : colorModerate
-    matrix.add_row(dataMatrix, matrix.rows(dataMatrix), array.from(label, formatNumber(volMovingAverage), formatNumber(vol), str.format("{0,number,#.#}", rvol)))
-    matrix.add_row(bgMatrix, matrix.rows(bgMatrix), array.from(colorModerate, colorModerate, clr, clr))
+    matrix.add_row(dataMatrix, matrix.rows(dataMatrix), array.from(label, formatNumber(volMovingAverage), formatNumber(_pmVol), formatNumber(_vol), str.format("{0,number,#.#}", rvol)))
+    matrix.add_row(bgMatrix, matrix.rows(bgMatrix), array.from(colorModerate, colorModerate, clr, clr, clr))
+
+getPremarketVolume() =>
+    hourStart = 4 
+    minStart = 0
+    hourEnd = 9
+    minEnd = 29
+    resolution = "1" // Will use the 1m to determine the pm volume
+    start = (hourStart * 60) + minStart
+    end = (hourEnd * 60) + minEnd
+    request.security(syminfo.tickerid, resolution, Utilities.getVolumeBetweenTimes(start, end))
 
 // Logic
 
 chartVolumeMa = ta.sma(volume, length)
 dailyVolume = request.security(syminfo.tickerid, "D", volume)
 dailyVolumeMa = request.security(syminfo.tickerid, "D", ta.sma(volume, length))
+premarketVolume = getPremarketVolume()
 
 if barstate.islast
     dataMatrix = matrix.new<string>()
     bgMatrix = matrix.new<color>()
     if showTitle
-        matrix.add_row(dataMatrix, 0, array.from("", "AVG", "CUR", "RVOL"))
-        matrix.add_row(bgMatrix, 0, array.from(COLOR_TRANSPARENT, colorModerate, colorModerate, colorModerate))
+        matrix.add_row(dataMatrix, 0, array.from("", "AVG", "PM", "CUR", "RVOL"))
+        matrix.add_row(bgMatrix, 0, array.from(COLOR_TRANSPARENT, colorModerate, colorModerate, colorModerate, colorModerate))
 
     if showChartData
-        addRow(dataMatrix, bgMatrix, "Chart", volume, chartVolumeMa)
+        addRow(dataMatrix, bgMatrix, "Chart", premarketVolume, volume, chartVolumeMa)
 
-    addRow(dataMatrix, bgMatrix, "1D", dailyVolume, dailyVolumeMa)
+    addRow(dataMatrix, bgMatrix, "1D", premarketVolume, dailyVolume, dailyVolumeMa)
 
     PrivateTable.fromMatrix(dataMatrix, bgMatrix, position, textSize=textSize, transposeTable=transpose)

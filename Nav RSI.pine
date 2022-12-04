@@ -8,32 +8,42 @@ indicator(title="Nav RSI", shorttitle="Nav RSI", format=format.price, precision=
 
 import jmosullivan/PrivateTable/5
 
+// Constants
+COLOR_PINK = color.rgb(232, 24, 170)
+COLOR_BLUE = color.rgb(40, 98, 255)
+
 // Configuration
 grp = "Table Layout"
-position         = input.string      (group=grp, defval=position.middle_right,      title="Position",   options=[position.top_right, position.middle_right, position.middle_left, position.bottom_right, position.bottom_left])
-textsize     = input.string      (group=grp, defval=size.tiny,             title="Text Size",  options=[size.tiny, size.small, size.normal])
-colorExtreme         = input.color       (group=grp, defval=color.rgb(232, 24, 170),  title="Extreme Color")
-colorModerate        = input.color       (group=grp, defval=color.rgb(40, 98, 255), title="Moderate Color")
+position = input.string(group=grp, defval=position.middle_right, title="Position", options=[position.top_right, position.middle_right, position.middle_left, position.bottom_right, position.bottom_left])
+textsize = input.string(group=grp, defval=size.tiny, title="Text Size", options=[size.tiny, size.small, size.normal])
+grp2 = "Appearance"
+show2p = input.bool(group=grp2, inline="1", defval=true, title="")
+color2p = input.color(group=grp2, inline="1", defval=color.new(COLOR_PINK, 80), title="")
+show14p = input.bool(group=grp2, inline="2", defval=true, title="")
+color14p = input.color(group=grp2, inline="2", defval=COLOR_BLUE, title="")
+style2p = input.string(group=grp2, inline="1", defval="line", options=["columns", "line"], title="2p RSI")
+style14p = input.string(group=grp2, inline="2", defval="line", options=["columns", "line"], title="14p RSI")
 
 // Functions
 
 getRsiArrays(length) =>
 	rsi = math.round(ta.rsi(close, length))
 	textArray = array.from(str.tostring(length) + "P", str.format("{0,number,#}", rsi))
-	rsiColor = rsi >= 70 or rsi <= 30 ? colorExtreme : colorModerate
+	rsiColor = rsi >= 70 or rsi <= 30 ? COLOR_PINK : COLOR_BLUE
 	colorArray = array.new_color(2, rsiColor)
 	[textArray, colorArray]
 
 // Logic
 
-rsi14 = ta.rsi(close, 14)
 rsi2 = ta.rsi(close, 2)
-plot(rsi14, "RSI", color=colorModerate, linewidth=2)
-plot(rsi2, "Secondary RSI", color=color.new(colorExtreme, 50), linewidth=2)
-rsiUpperBand = hline(70, "RSI Upper Band", color=colorModerate)
-hline(50, "RSI Middle Band", color=color.new(colorModerate, 50))
-rsiLowerBand = hline(30, "RSI Lower Band", color=colorModerate)
-fill(rsiUpperBand, rsiLowerBand, color=color.new(colorModerate, 95), title="RSI Background Fill")
+rsi14 = ta.rsi(close, 14)
+plot(rsi2, "Secondary RSI", color=color2p, linewidth=2, style=style2p == "line" ? plot.style_line : plot.style_columns)
+plot(rsi14, "RSI", color=color14p, linewidth=2, style=style14p == "line" ? plot.style_line : plot.style_columns)
+rsiUpperBand = hline(70, "RSI Upper Band", color=COLOR_BLUE)
+rsiMidline = hline(50, "RSI Middle Band", color=color.new(COLOR_BLUE, 50))
+rsiLowerBand = hline(30, "RSI Lower Band", color=COLOR_BLUE)
+fill(rsiUpperBand, rsiMidline, color=color.new(color.green, 95), title="RSI Background Fill")
+fill(rsiMidline, rsiLowerBand, color=color.new(color.red, 95), title="RSI Background Fill")
 
 // Build up the matrix to be rendered
 [rsi2TextArray, rsi2ColorArray] = getRsiArrays(2)

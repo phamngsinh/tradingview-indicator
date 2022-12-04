@@ -11,6 +11,10 @@ lineColor = input.color(defval=color.rgb(40, 98, 255), title="Scout line, label 
 textColor = input.color(defval=color.white, title="", inline="1")
 labelTextSize = input.string(defval=size.small, title="Label text size", options=[size.auto, size.tiny, size.small, size.normal, size.large, size.huge])
 debugMode = input.bool(defval=false, title="Debug mode")
+maxTimeframes = input.int(defval=4, title="Max Timeframes (debug)", minval=3, maxval = 10, step = 1)
+
+d = array.new_string()
+array.push(d, "Debug")
 
 var timeframeArray = PrivateTA.getPivotTimeframes()
 
@@ -58,45 +62,67 @@ getMatrixByTimeframe(tf) =>
 requestSecurity(timeframe, expression) =>
     request.security(syminfo.tickerid, timeframe, expression)
 
+getTimeframeMultiplier(timeframe) =>
+    num = str.tonumber(timeframe)
+    if (na(num))
+        num := 1
+    num
+
+timeframeInSeconds(string timeframe, bool includeWeekends = true) =>
+    sMinute = 60
+    sHour = sMinute * 60
+    sDay = sHour * 24
+    sWeek = sDay * (includeWeekends ? 7 : 5)
+    // TV has a weird value for this, so I'm just using theirs when including weekends
+    sMonth = includeWeekends ? timeframe.in_seconds("M") : sWeek * 4
+    letter = str.substring(timeframe, str.length(timeframe) - 1)
+    multiplier = switch letter
+        "M" => sMonth
+        "W" => sWeek
+        "D" => sDay
+        "H" => sHour
+        => sMinute
+
+    number = int(str.tonumber(timeframe))
+    increment = na(number) ? 1 : number
+    increment * multiplier
+
 definePivotsByTimeframe(timeframe) =>
     // For larger timeframes, save fewer pivots
     // This is done so that smaller timeframe pivots drawn on the chart will fill up the larger ones
     maxRows = 400
-    tfIndex = array.indexof(timeframeArray, timeframe)
-    maxRows := maxRows / (tfIndex+1)
-    lookbackBars = lookback // 10 // Look back the equivalent of 3 bars on the requested timeframe
     pivotMatrix = getMatrixByTimeframe(timeframe)
     pivotHigh = float(na)
     pivotLow = float(na)
-
+    _lookback = lookback
     if (timeframe == "5")
-        pivotHigh := requestSecurity("5", PrivateTA.pivotHigh(lookbackBars))
-        pivotLow := requestSecurity("5", PrivateTA.pivotLow(lookbackBars))
+        pivotHigh := requestSecurity("5", PrivateTA.pivotHigh(_lookback))
+        pivotLow := requestSecurity("5", PrivateTA.pivotLow(_lookback))
     if (timeframe == "15")
-        pivotHigh := requestSecurity("15", PrivateTA.pivotHigh(lookbackBars))
-        pivotLow := requestSecurity("15", PrivateTA.pivotLow(lookbackBars))
+        pivotHigh := requestSecurity("15", PrivateTA.pivotHigh(_lookback))
+        pivotLow := requestSecurity("15", PrivateTA.pivotLow(_lookback))
     if (timeframe == "60")
-        pivotHigh := requestSecurity("60", PrivateTA.pivotHigh(lookbackBars))
-        pivotLow := requestSecurity("60", PrivateTA.pivotLow(lookbackBars))
+        pivotHigh := requestSecurity("60", PrivateTA.pivotHigh(_lookback))
+        pivotLow := requestSecurity("60", PrivateTA.pivotLow(_lookback))
     if (timeframe == "240")
-        pivotHigh := requestSecurity("240", PrivateTA.pivotHigh(lookbackBars))
-        pivotLow := requestSecurity("240", PrivateTA.pivotLow(lookbackBars))
+        pivotHigh := requestSecurity("240", PrivateTA.pivotHigh(_lookback))
+        pivotLow := requestSecurity("240", PrivateTA.pivotLow(_lookback))
     if (timeframe == "D")
-        pivotHigh := requestSecurity("D", PrivateTA.pivotHigh(lookbackBars))
-        pivotLow := requestSecurity("D", PrivateTA.pivotLow(lookbackBars))
+        pivotHigh := requestSecurity("D", PrivateTA.pivotHigh(_lookback))
+        pivotLow := requestSecurity("D", PrivateTA.pivotLow(_lookback))
     if (timeframe == "W")
-        pivotHigh := requestSecurity("W", PrivateTA.pivotHigh(lookbackBars))
-        pivotLow := requestSecurity("W", PrivateTA.pivotLow(lookbackBars))
+        pivotHigh := requestSecurity("W", PrivateTA.pivotHigh(_lookback))
+        pivotLow := requestSecurity("W", PrivateTA.pivotLow(_lookback))
     if (timeframe == "M")
-        pivotHigh := requestSecurity("M", PrivateTA.pivotHigh(lookbackBars))
-        pivotLow := requestSecurity("M", PrivateTA.pivotLow(lookbackBars))
+        pivotHigh := requestSecurity("M", PrivateTA.pivotHigh(_lookback))
+        pivotLow := requestSecurity("M", PrivateTA.pivotLow(_lookback))
     if timeframe == timeframe.period
         // Use the current chart's pivots
-        pivotHigh := PrivateTA.pivotHigh(lookbackBars)
-        pivotLow := PrivateTA.pivotLow(lookbackBars)
+        pivotHigh := PrivateTA.pivotHigh(_lookback)
+        pivotLow := PrivateTA.pivotLow(_lookback)
 
-    PrivateTA.processPivot(pivotMatrix, pivotHigh, "High", lookbackBars, maxRows=maxRows)
-    PrivateTA.processPivot(pivotMatrix, pivotLow, "Low", lookbackBars, maxRows=maxRows)
+    PrivateTA.processPivot(pivotMatrix, pivotHigh, "High", _lookback, maxRows=maxRows)
+    PrivateTA.processPivot(pivotMatrix, pivotLow, "Low", _lookback, maxRows=maxRows)
 
 // Look through the given matrix for the last time there was an up or down trend,
 // Return that trend and count
@@ -114,9 +140,6 @@ getLastTrend(pivotMatrix, startIndex = -1) =>
         i -= 1
             
     [trend, lastRealTrendCount]
-
-d = array.new_string()
-array.push(d, "Debug")
 
 // Placeholder for finding price from parents
 getParentPivot(sourceTimeframe, seekingPivotType, referencePivotPrice) =>
@@ -535,7 +558,8 @@ for i = 0 to array.size(timeframeArray) - 1
     timeframe = array.get(timeframeArray, i)
     if Utilities.timeframeInSeconds(timeframe) > timeframe.in_seconds(timeframe.period)
         validTimeframeCount += 1
-        definePivotsByTimeframe(timeframe)
+        if validTimeframeCount <= maxTimeframes
+            definePivotsByTimeframe(timeframe)
 
     if validTimeframeCount == 1
         parentTimeframe := timeframe
@@ -544,11 +568,10 @@ for i = 0 to array.size(timeframeArray) - 1
 
 // Draw the full table
 if barstate.islast
+    cleanup()
     chartMatrix = getMatrixByTimeframe(timeframe.period)
     array.push(d, str.tostring(matrix.rows(chartMatrix)))
     getTrend(chartMatrix)
-    if debugMode
-        PrivateTable.fromArray(d, transposeTable = true, position=position.bottom_right)
 
     // Draw grandparent lines and labels
     if not na(grandParentTimeframe)
@@ -557,10 +580,13 @@ if barstate.islast
         if debugMode
             PrivateTA.drawPivotLabels(grandParentTimeframe, grandparentMatrix, chartMatrix, labelArray, maxLabels=9)
 
+        // // Debug the last 20 rows added to the grandparent pivot table so you can see where the scout data is coming from:
+        // rows = matrix.rows(grandparentMatrix)
+        // while rows > 20
+        //     matrix.remove_row(grandparentMatrix, 0)
+        //     rows -= 1
+        // PrivateTable.fromMatrix(grandparentMatrix, position = position.bottom_right)
 
-    // hourMatrix = getMatrixByTimeframe("60")
-    // rows = matrix.rows(hourMatrix)
-    // while rows > 20
-    //     matrix.remove_row(hourMatrix, 0)
-    //     rows -= 1
-    // PrivateTable.fromMatrix(hourMatrix, position = position.bottom_right)
+    if debugMode
+        PrivateTable.fromArray(d, transposeTable = true, position=position.bottom_right)
+

@@ -6,6 +6,29 @@
 // @description Utility functions for my indicators.
 library("Utilities")
 
+// @function Tradingview doesn't allow you to pull simple strings from arrays, so this function can be used to extract a simple string from a comma-delimited list.
+// @param list (string) The comma-delimited list
+// @param index (int) The index (zero-based) of the item to extract from the list
+// @param default (string) The default value to return if the index is not in the string
+// @param delimiter (string) The delimiter in the string (default is comma)
+// @returns (string) The item from the comma-delimited list
+export getItemFromList(string list, int index, string default = "", string delimiter = ",") =>
+    startPos = 0
+    listLen = str.length(list)
+    endPos = str.pos(list, delimiter)
+    iterator = -1
+    endOfList = false
+    while iterator < index and not endOfList
+        iterator += 1
+        if endPos == listLen
+            endOfList := true
+        else
+            startPos := endPos+1
+            endPos := str.pos(str.substring(list, startPos), delimiter)
+            endPos := na(endPos) ? listLen : startPos + endPos
+    
+    iterator == index ? str.substring(list, startPos, endPos) : default
+
 // @function Tradingview doesn't give you a nice way to put the line styles into a dropdown for configuration settings. So, I specify them in the following format: ["Solid", "Dashed", "Dotted", "None/Hidden"]. This function takes care of converting those custom strings back to the ones expected by tradingview scripts. 
 // @param show (string) styleString
 // @param acceptGivenIfNoMatch (bool) If no match for styleString is found and this is true, the function will return styleString, otherwise it will return tradingview's preferred default
@@ -37,6 +60,31 @@ export getLabelStyleFromString(string styleString, bool acceptGivenIfNoMatch = t
         => acceptGivenIfNoMatch ? styleString : label.style_label_down
     ret
 
+// @function Create and return a label after the last bar. 
+// @param show (bool) Should the label show or not?
+// @param labelStyle (string) One of: label.style_label* or "transparent". If "transparent", textColor value will be inverted with the label color (and label color will become transparent).
+// @param x (int) Bar index on the x-axis
+// @param y (float) Price on the y-axis
+// @param labelText (string) Label text
+// @param textSize (string) One of size.* values
+// @param labelColor (color) Color of the label background
+// @param textColor (color) Color of the text within the label. Defaults to color.white.
+export getLabel(int x, float y, string labelText, bool show = true, string labelStyle = label.style_label_left, string textSize = size.small, color labelColor = color.blue, color textColor = color.white, string xloc=xloc.bar_index) =>
+    lbl = label(na)
+    if (show and labelStyle != "No Labels")
+        // May need to shuffle the colors around depending on the label style being rendered
+        _labelColor = labelColor
+        _textColor = textColor
+        _labelStyle = getLabelStyleFromString(labelStyle)
+        if (_labelStyle == "transparent")
+            _labelStyle := label.style_none
+            _labelColor := color.rgb(0,0,0,100) // Make the label background transparent
+            _textColor := labelColor // Make the text the color of the label background
+
+        lbl := label.new(x=x, y=y, xloc=xloc, text=labelText, style=_labelStyle, color=_labelColor, textcolor=_textColor, size=textSize, textalign=text.align_left)
+    lbl
+
+
 // @function Draw a label after the last bar. 
 // @param show (bool) Should the label show or not?
 // @param labelStyle (string) One of: label.style_label* or "transparent". If "transparent", textColor value will be inverted with the label color (and label color will become transparent).
@@ -49,17 +97,7 @@ export getLabelStyleFromString(string styleString, bool acceptGivenIfNoMatch = t
 export drawLabel(int x, float y, string labelText, bool show = true, string labelStyle = label.style_label_left, string textSize = size.small, color labelColor = color.blue, color textColor = color.white, string xloc=xloc.bar_index) =>
     var label lbl = na
     label.delete(lbl)
-    if (show and labelStyle != "No Labels")
-        // May need to shuffle the colors around depending on the label style being rendered
-        _labelColor = labelColor
-        _textColor = textColor
-        _labelStyle = getLabelStyleFromString(labelStyle)
-        if (_labelStyle == "transparent")
-            _labelStyle := label.style_none
-            _labelColor := color.rgb(0,0,0,100) // Make the label background transparent
-            _textColor := labelColor // Make the text the color of the label background
-
-        lbl := label.new(x=x, y=y, xloc=xloc, text=labelText, style=_labelStyle, color=_labelColor, textcolor=_textColor, size=textSize, textalign=text.align_left)
+    lbl := getLabel(x=x, y=y, labelText=labelText, show=show, labelStyle=labelStyle, textSize=textSize, labelColor=labelColor, textColor=textColor, xloc=xloc)
 
 // @function Draw a horizontal line.
 // @param show (bool) Should the line and label show or not?
@@ -169,6 +207,24 @@ export getLevelBetweenTimes(string highOrLow, int start, int end) =>
     else
         reset := true
     ret
+
+// @function Given a start and end time, returns the sum of all volume across bars during that time window.
+// @param start The timestamp to start with (# of seconds)
+// @param end The timestamp to end with (# of seconds)
+// @returns (float) The volume
+export getVolumeBetweenTimes(int start, int end) =>
+    var float vol = 0
+    var reset = true
+    minNow = (hour * 60) + minute
+    if minNow >= start and minNow <= end
+        if reset
+            vol := volume
+            reset := false
+        else
+            vol += volume
+    else
+        reset := true
+    vol
 
 // @function Get the timeframe of the current chart
 // @returns (string) The string of the current chart timeframe
