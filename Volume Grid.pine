@@ -8,7 +8,7 @@
 indicator(title='Volume Grid', overlay=true, scale=scale.none)
 
 import jmosullivan/PrivateTable/5
-import jmosullivan/Utilities/24
+import jmosullivan/Utilities/25
 
 var COLOR_MODERATE = color.rgb(40, 98, 255)
 var COLOR_EXTREME = color.rgb(232, 24, 170)
@@ -17,29 +17,16 @@ var COLOR_TRANSPARENT = color.rgb(255, 255, 255, 100)
 // Configuration
 grp = "Layout"
 topOffset = input.int(group=grp, defval=0, title="Top Offset", options=[0, 1, 2, 3])
-showTitle = input.bool(group=grp, defval=true, title="Show Title")
 position = input.string(group=grp, defval=position.bottom_right, title="Position", options=[position.top_right, position.bottom_right, position.bottom_left])
 textSize = input.string(group=grp, defval=size.tiny, title="Text Size", options=[size.tiny, size.small, size.normal, size.large])
 colorExtreme = input.color(group=grp, defval=COLOR_EXTREME, title="Extreme Color")
 colorModerate = input.color(group=grp, defval=COLOR_MODERATE, title="Moderate Color")
 length = input.int(group=grp, defval=30, title="Vol MA Length")
 transpose = input.bool(group=grp, defval=false, title="Vertical Table")
-showChartData = input.bool(group=grp, defval=false, title="Show Active Chart Data")
 
 // Functions
 
-formatNumber(num) =>
-    var n = num
-    var ret = str.format("{0,number,#}", n)
-    if (num > 999)
-        n := num / 1000
-        ret := str.format("{0,number,#.#}", n) + "k"
-    if (num > 999999)
-        n := num / 1000000
-        ret := str.format("{0,number,#.#}", n) + "M"
-    ret
-
-addRow(dataMatrix, bgMatrix, label, pmVol, vol, volMovingAverage) =>
+addRow(dataMatrix, bgMatrix, pmVol, vol, volMovingAverage) =>
     // Kludge: During premarket, TV treats today as yesterday and premarket as part of that.
     // After premarket, it starts volume all over again as a fresh number from zero, so we combine the 
     // two for a more accurate representation of the volume on the day that includes premarket volume. 
@@ -53,8 +40,17 @@ addRow(dataMatrix, bgMatrix, label, pmVol, vol, volMovingAverage) =>
     rvol = _vol/volMovingAverage
     isExtreme = rvol >= 1
     clr = isExtreme ? colorExtreme : colorModerate
-    matrix.add_row(dataMatrix, matrix.rows(dataMatrix), array.from(label, formatNumber(volMovingAverage), formatNumber(_pmVol), formatNumber(_vol), str.format("{0,number,#.#}", rvol)))
-    matrix.add_row(bgMatrix, matrix.rows(bgMatrix), array.from(colorModerate, colorModerate, clr, clr, clr))
+
+    dArray = array.from(Utilities.formatNumber(volMovingAverage))
+    cArray = array.from(clr, clr, clr)
+    if timeframe.isintraday
+        array.push(dArray, Utilities.formatNumber(_pmVol))
+        array.push(cArray, clr)
+    
+    array.push(dArray, Utilities.formatNumber(_vol))
+    array.push(dArray, str.format("{0,number,#.#}", rvol))
+    matrix.add_row(dataMatrix, matrix.rows(dataMatrix), dArray)
+    matrix.add_row(bgMatrix, matrix.rows(bgMatrix), cArray)
 
 getPremarketVolume() =>
     hourStart = 4 
@@ -76,13 +72,15 @@ premarketVolume = getPremarketVolume()
 if barstate.islast
     dataMatrix = matrix.new<string>()
     bgMatrix = matrix.new<color>()
-    if showTitle
-        matrix.add_row(dataMatrix, 0, array.from("", "AVG", "PM", "CUR", "RVOL"))
-        matrix.add_row(bgMatrix, 0, array.from(COLOR_TRANSPARENT, colorModerate, colorModerate, colorModerate, colorModerate))
+    titleArray = array.from("ADV")
+    titleBgColorArray = array.from(colorModerate, colorModerate, colorModerate)
+    if timeframe.isintraday
+        array.push(titleArray, "PM")
+        array.push(titleBgColorArray, colorModerate)
 
-    if showChartData
-        addRow(dataMatrix, bgMatrix, "Chart", premarketVolume, volume, chartVolumeMa)
-
-    addRow(dataMatrix, bgMatrix, "1D", premarketVolume, dailyVolume, dailyVolumeMa)
-
+    array.push(titleArray, "DAY")
+    array.push(titleArray, "RVOL")
+    matrix.add_row(dataMatrix, 0, titleArray)
+    matrix.add_row(bgMatrix, 0, titleBgColorArray)
+    addRow(dataMatrix, bgMatrix, premarketVolume, dailyVolume, dailyVolumeMa)
     PrivateTable.fromMatrix(dataMatrix, bgMatrix, position, textSize=textSize, transposeTable=transpose)

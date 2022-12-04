@@ -34,19 +34,15 @@ var linefillArray = array.new<linefill>()
 // Functions
 cleanup() =>
     labelCount = array.size(labelArray)
-    if (labelCount > 0)
-        for i = 0 to labelCount - 1
-            label.delete(array.get(labelArray, i))
+    for l in labelArray
+        label.delete(l)
     
-    linefillCount = array.size(linefillArray)
-    if (linefillCount > 0)
-        for i = 0 to linefillCount - 1
-            linefill.delete(array.get(linefillArray, i))
+    for l in linefillArray
+        linefill.delete(l)
 
     lineCount = array.size(lineArray)
-    if (lineCount > 0)
-        for i = 0 to lineCount - 1
-            line.delete(array.get(lineArray, i))
+    for l in lineArray
+        line.delete(l)
 
 getMatrixByTimeframe(tf) =>
     switch tf
@@ -147,8 +143,7 @@ getParentPivot(sourceTimeframe, seekingPivotType, referencePivotPrice) =>
     scoutPrice = float(na)
     scoutPivotTime = float(na)
     scoutTimeframe = string(na)
-    for i = 0 to array.size(timeframeArray) - 1
-        timeframe = array.get(timeframeArray, i)
+    for timeframe in timeframeArray
         if Utilities.timeframeInSeconds(timeframe) > Utilities.timeframeInSeconds(sourceTimeframe)
             parentMatrix = getMatrixByTimeframe(timeframe)
             parentMatrixRows = matrix.rows(parentMatrix)
@@ -444,8 +439,7 @@ getTrend(chartMatrix) =>
         doTrend = string(na)
         // If the current timeframe isn't in the timeframe array, include it in the valid count so the correct parents are found
         validMatrixCount = array.includes(timeframeArray, timeframe.period) ? 0 : 1
-        for i = 0 to array.size(timeframeArray) - 1
-            timeframe = array.get(timeframeArray, i)
+        for timeframe in timeframeArray
             pivotMatrix = getMatrixByTimeframe(timeframe)
             pivotRows = matrix.rows(pivotMatrix)
             if (pivotRows > 0)
@@ -554,8 +548,7 @@ definePivotsByTimeframe(timeframe.period)
 parentTimeframe = string(na)
 grandParentTimeframe = string(na)
 validTimeframeCount = 0
-for i = 0 to array.size(timeframeArray) - 1
-    timeframe = array.get(timeframeArray, i)
+for timeframe in timeframeArray
     if Utilities.timeframeInSeconds(timeframe) > timeframe.in_seconds(timeframe.period)
         validTimeframeCount += 1
         if validTimeframeCount <= maxTimeframes
