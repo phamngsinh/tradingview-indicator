@@ -1,0 +1,318 @@
+// © jmosullivan
+//@version=5
+indicator("Market Internals")
+
+import jmosullivan/PrivateTable/10
+import jmosullivan/Utilities/23
+
+debugArray = array.new<string>()
+array.push(debugArray, "Debug")
+
+// Configuration settings
+
+// Color constants
+COLOR_RED = color.rgb(244, 87, 100)
+COLOR_GREEN = color.rgb(66, 176, 95)
+COLOR_BLUE = color.rgb(40, 98, 255)
+// General Settings
+grpGeneral = "General Settings"
+internalType = input.string(group=grpGeneral, defval="TICK", options=["TICK", "ADD", "Up/Down Volume"], title="Internal Type", tooltip="You can only display one type of internal at a time. If you want to see both types of internals data, add the indicator to the chart twice and configure each one to display the other type of internal calculation.")
+rangeThresholdPercent = input.int(group=grpGeneral, defval=47, title="TICK threshold %", minval=0, maxval=100, step=1, tooltip="The level at which price is considered to be extreme, calculated as a percentage of the total # of ticks available.\n\nExample, there are 2800 traded stocks on the NYSE, so a tick level of +/- 600 would be +/- 47%. Note: this is only used when TICK internal type is selected.")
+// Candle Colors
+grpCandle = "Bull/Bear Candle/Wick Colors"
+bullColor = input.color(group=grpCandle, defval=color.new(COLOR_GREEN, 40), title="", inline="1")
+bullWickColor = input.color(group=grpCandle, defval=COLOR_GREEN, title="", inline="1")
+bearColor = input.color(group=grpCandle, defval=color.new(COLOR_RED, 40), title="", inline="1")
+bearWickColor = input.color(group=grpCandle, defval=COLOR_RED, title="", inline="1")
+// TICK range background colors
+grpTick = "TICK Range bg, high, mid, & low colors"
+rangeBgColor = input.color(group=grpTick, defval=color.new(COLOR_BLUE, 95), title="", inline="2")
+rangeHighColor = input.color(group=grpTick, defval=color.new(COLOR_BLUE, 70), title="", inline="2")
+rangeMidColor = input.color(group=grpTick, defval=color.new(COLOR_BLUE, 70), title="", inline="2")
+rangeLowColor = input.color(group=grpTick, defval=color.new(COLOR_BLUE, 70), title="", inline="2", tooltip="These colors are only only used when TICK internal type is selected.")
+// Kludge - Putting this up here so I don't need to pass it into the functions below :D
+etf = syminfo.ticker
+availableEtfs = array.from("XLB", "XLC", "XLE", "XLF", "XLI", "XLK", "XLP", "XLRE", "XLU", "XLV", "XLY")
+tickMatrix = matrix.new<float>()
+volUpMatrix = matrix.new<float>()
+volDownMatrix = matrix.new<float>()
+tickArray = array.new<int>()
+
+// Functions
+
+// Don't know why this won't work via a utility file. But it works here...
+getItemFromList(list, index, default = "", delimiter = ",") =>
+    startPos = 0
+    listLen = str.length(list)
+    endPos = str.pos(list, delimiter)
+    iterator = 0
+    endOfList = false
+    while iterator < index and not endOfList
+        iterator += 1
+        if endPos == listLen
+            endOfList := true
+            iterator := index + 1
+        else
+            startPos := endPos+1
+            endPos := str.pos(str.substring(list, startPos), delimiter)
+            endPos := na(endPos) ? listLen : startPos + endPos
+    
+    iterator == index ? str.substring(list, startPos, endPos) : default
+
+symbolPicker(n) =>
+    switch
+        // Source: https://www.ssga.com/us/en/intermediary/etfs/funds/the-materials-select-sector-spdr-fund-xlb
+        etf == "XLB" => getItemFromList("LIN,APD,SHW,FCX,CTVA,NUE,DOW,NEM,ECL,DD,ALB,PPG,IFF,VMC,MLM,LYB,CF,AMCR,MOS,BALL,FMC,AVY,IP,PKG,CE,EMN,WRK,SEE", n)
+        // Source: https://www.ssga.com/us/en/intermediary/etfs/funds/the-communication-services-select-sector-spdr-fund-xlc
+        etf == "XLC" => getItemFromList("META,GOOGL,GOOG,T,NFLX,CHTR,CMCSA,TMUS,ATVI,VZ,DIS,EA,WBD,OMC,TTWO,IPG,MTCH,LYV,PARA,FOXA,NWSA,LUMN,FOX,DISH,NWS", n)
+        // Source: https://www.ssga.com/us/en/intermediary/etfs/funds/the-financial-select-sector-spdr-fund-xle
+        etf == "XLE" => getItemFromList("XOM,CVX,SLB,EOG,COP,MPC,PXD,VLO,PSX,OXY,DVN,WMB,HES,KMI,HAL,OKE,BKR,FANG,CTRA,MRO,APA,TRGP,EQT", n)
+        // Source: https://www.ssga.com/us/en/intermediary/etfs/funds/the-financial-select-sector-spdr-fund-xlf
+        etf == "XLF" => getItemFromList("BRK.B,JPM,BAC,WFC,GS,SCHW,MS,SPGI,BLK,AXP,C,CB,MMC,PGR,PNC,AON,CME,TFC,USB,ICE,MET,AIG,MCO,TRV,AJG,AFL,PRU,COF,MSCI,ALL,AMP,BK,MTB,DFS,TROW,STT,WTW,FITB,HIG,RJF,NDAQ,FRC", n)
+        // Source: https://www.ssga.com/us/en/intermediary/etfs/funds/the-industrial-select-sector-spdr-fund-xli
+        etf == "XLI" => getItemFromList("HON,RTX,UPS,UNP,CAT,DE,LMT,BA,GE,NOC,MMM,CSX,ETN,ITW,WM,NSC,GD,EMR,JCI,LHX,FDX,TT,CTAS,PH,CARR,PCAR,CMI,OTIS,AME,TDG,CSGP,ROK,FAST,RSG,VRSK,CPRT,ODFL,GWW,URI,FTV,LUV", n)
+        // Source: https://www.ssga.com/us/en/intermediary/etfs/funds/the-financial-select-sector-spdr-fund-xlk
+        etf == "XLK" => getItemFromList("AAPL,MSFT,NVDA,V,MA,AVGO,CSCO,ACN,TXN,ADBE,CRM,QCOM,IBM,ORCL,INTC,AMD,INTU,ADP,AMAT,PYPL,ADI,NOW,FISV,MU,LRCX,KLAC,SNPS,APH,ROP,CDNS,MSI,NXPI,ADSK,ENPH,FIS,MCHP,TEL,PAYX,FTNT,ANET,KEYS",  n)
+        // Source: https://www.ssga.com/us/en/intermediary/etfs/funds/the-consumer-staples-select-sector-spdr-fund-xlp
+        etf == "XLP" => getItemFromList("PG,PEP,KO,COST,WMT,MDLZ,PM,MO,CL,ADM,EL,GIS,KMB,SYY,STZ,MNST,HSY,KDP,KR,KHC,WBA,MKC,CHD,TSN,K,CLX,CAG,SJM,HRL,BF.B,LW,CPB,TAP", n)
+        // Source: https://www.ssga.com/us/en/intermediary/etfs/funds/the-real-estate-select-sector-spdr-fund-xlre
+        etf == "XLRE" => getItemFromList("PLD,AMT,EQIX,CCI,PSA,O,SPG,VICI,WELL,SBAC,DLR,CBRE,AVB,WY,ARE,EQR,EXR,MAA,INVH,VTR,IRM,KIM,ESS,PEAK,HST,CPT,UDR,REG,BXP,FRT,VNO", n)
+        // Source: https://www.ssga.com/us/en/intermediary/etfs/funds/the-utilities-select-sector-spdr-fund-xlu
+        etf == "XLU" => getItemFromList("NEE,DUK,SO,SRE,D,AEP,EXC,XEL,ED,CEG,WEC,PEG,ES,AWK,PCG,EIX,ETR,AEE,DTE,FE,PPL,CNP,AES,CMS,ATO,LNT,EVRG,NI,NRG,PNW", n)
+        // Source: https://www.ssga.com/us/en/intermediary/etfs/funds/the-health-care-select-sector-spdr-fund-xlv
+        etf == "XLV" => getItemFromList("UNH,JNJ,LLY,ABBV,PFE,MRK,TMO,ABT,DHR,BMY,AMGN,CVS,ELV,GILD,MDT,CI,ISRG,VRTX,REGN,SYK,ZTS,BDX,HUM,BSX,MRNA,MCK,HCA,CNC,EW,A,DXCM,BIIB,IQV,IDXX,ILMN,RMD,MTD,BAX,ABC,ZBH,LH", n)
+        => string(na)
+
+requestExpression() => 
+    tick = switch
+        close > close[1] => 1
+        close < close[1] => -1
+        => 0
+
+    // upVol = float(0)
+    // downVol = float(0)
+    // switch
+    //     close > open => upVol += volume
+    //     close < open => downVol -= volume
+    //     close >= close[1] => upVol += volume
+    //     close < close[1] => downVol -= volume
+
+    // [tick, upVol, downVol]
+    tick
+
+getTick(thisPrice, lastPrice) =>
+    tick = 0
+    if thisPrice > lastPrice
+        tick := 1
+    else if thisPrice < lastPrice
+        tick := -1
+    tick
+
+addTicker(tickerNumber) =>
+    ticker = symbolPicker(tickerNumber)
+    array.push(tickArray, request.security(ticker, timeframe.period, requestExpression()))
+
+addTickerLower(tickerNumber) =>
+    ticker = symbolPicker(tickerNumber)
+    lowerTimeframe = switch
+        timeframe.isintraday => "1"
+        timeframe.isdaily => "5"
+        => "60"
+
+    // [t, u, d] = request.security_lower_tf(ticker, lowerTimeframe, requestExpression())
+    t = request.security_lower_tf(ticker, lowerTimeframe, requestExpression())
+    if not na(ticker) and array.size(t) == 5
+        // if internalType == "Up/Down Volume"
+        //     matrix.add_row(volUpMatrix, matrix.rows(volUpMatrix), u)
+        //     matrix.add_row(volDownMatrix, matrix.rows(volDownMatrix), d)
+        // else 
+        // array.push(debugArray, str.tostring(array.size(t)))
+        // array.push(debugArray, ticker + " " + str.tostring(array.size(t)))
+        matrix.add_row(tickMatrix, matrix.rows(tickMatrix), t)
+
+processTicks() =>
+    array.sum(tickArray)
+
+processTicksLower() =>
+    o = float(na)
+    h = float(na)
+    l = float(na)
+    c = float(na)
+    // if internalType == "Up/Down Volume"
+    //     // Process up/down volume
+    // else 
+    // Process tick values
+    count = matrix.columns(tickMatrix)
+    if count > 0
+        ticks = array.new<float>()
+        for i = 0 to count - 1
+            array.push(ticks, array.sum(matrix.col(tickMatrix, i)))
+
+        o := array.get(ticks, 0)
+        h := array.max(ticks)
+        l := array.min(ticks)
+        c := array.get(ticks, math.round(count - 1))
+
+        // if count > 0 and array.size(debugArray) == 1
+        //     array.push(debugArray, "Count: " + str.tostring(count))
+        //     array.push(debugArray, "o: " + str.tostring(o))
+        //     array.push(debugArray, "h: " + str.tostring(h))
+        //     array.push(debugArray, "l: " + str.tostring(l))
+        //     array.push(debugArray, "c: " + str.tostring(c))
+
+        //     dm = matrix.new<float>()
+        //     matrix.add_row(dm, 0, ticks)
+        //     PrivateTable.fromMatrix(dm)
+
+    [o, h, l, c, count]
+
+// processVolume(dataMatrix) =>
+//     upVol = array.sum(matrix.col(dataMatrix, 0))
+//     downVol = array.sum(matrix.col(dataMatrix, 1))
+//     [upVol, downVol]
+
+setRangeLine(y, color, lineStyle=line.style_solid) =>
+    line.new(
+       x1=bar_index[1], 
+       x2=bar_index, 
+       y1=y, 
+       y2=y, 
+       extend=extend.both, 
+       color=color, 
+       style=lineStyle,
+       width=1
+       )
+
+// Indicator Logic
+
+// Values for rendering
+tickCount = float(na)
+_open = float(na)
+_high = float(na)
+_low = float(na)
+_close = float(na)
+upVolume = float(na)
+downVolume = float(na)
+// Vars for ADD collection
+var addOpen = float(0)
+var addHigh = float(0)
+var addLow = float(0)
+var addClose = float(0)
+// Reset these values to zero when the regular market session begins
+var wasRegularSession = bool(na)
+if wasRegularSession == false and session.ismarket
+    addOpen := 0
+    addHigh := 0
+    addLow := 0
+    addClose := 0
+
+wasRegularSession := session.ismarket
+
+if session.ismarket
+    addTicker(0)
+    addTicker(1)
+    addTicker(2)
+    addTicker(3)
+    addTicker(4)
+    addTicker(5)
+    addTicker(6)
+    addTicker(7)
+    addTicker(8)
+    addTicker(9)
+    addTicker(10)
+    addTicker(11)
+    addTicker(12)
+    addTicker(13)
+    addTicker(14)
+    addTicker(15)
+    addTicker(16)
+    addTicker(17)
+    addTicker(18)
+    addTicker(19)
+    addTicker(20)
+    addTicker(21)
+    addTicker(22)
+    addTicker(23)
+    addTicker(24)
+    addTicker(25)
+    addTicker(26)
+    addTicker(27)
+    addTicker(28)
+    addTicker(29)
+    addTicker(30)
+    addTicker(31)
+    addTicker(32)
+    addTicker(33)
+    addTicker(34)
+    addTicker(35)
+    addTicker(36)
+    addTicker(37)
+    addTicker(38)
+    addTicker(39)
+
+// if internalType == "Up/Down Volume"
+//     [u, d] = processVolume(dataMatrix)
+//     upVolume := u
+//     downVolume := d
+// else 
+// [o, h, l, c, co] = processTicks()
+tick = array.sum(tickArray)
+tickCount := array.size(tickArray)
+plot(tick)
+
+PrivateTable.fromArray(debugArray, position=position.middle_right)
+// PrivateTable.fromMatrix(tickMatrix)
+// PrivateTable.debug(str.tostring(array.size(debugArray)))
+
+// _open := o
+// _high := h
+// _low := l
+// _close := c
+// tickCount := co
+// if internalType == "ADD"
+//     addOpen := addClose + o
+//     addHigh := addClose + h
+//     addLow := addClose + l
+//     addClose := addClose + c
+//     _open := addOpen
+//     _high := addHigh
+//     _low := addLow
+//     _close := addClose
+
+// Visualizations
+// candleColor = _open > _close ? bearColor : bullColor
+// candleWickAndBorderColor = _open > _close ? bearWickColor : bullWickColor
+// plotcandle(
+//    open=_open, 
+//    high=_high, 
+//    low=_low, 
+//    close=_close, 
+//    title='', 
+//    color=candleColor, 
+//    wickcolor=candleWickAndBorderColor,
+//    bordercolor=candleWickAndBorderColor
+//    )
+
+var rangeHighLine = line(na)
+var rangeMidLine = line(na)
+var rangeLowLine = line(na)
+var rangeLineFill = linefill(na)
+var extremeThreshold = float(na)
+if internalType == "TICK" and tickCount > 0 and barstate.islast
+    extremeThreshold := tickCount * rangeThresholdPercent / 100
+    line.delete(rangeHighLine)
+    line.delete(rangeMidLine)
+    line.delete(rangeLowLine)
+    rangeHighLine := setRangeLine(extremeThreshold, rangeHighColor)
+    rangeMidLine := setRangeLine(0, rangeMidColor, line.style_dashed)
+    rangeLowLine := setRangeLine(-extremeThreshold, rangeLowColor)
+    linefill.delete(rangeLineFill)
+    rangeLineFill := linefill.new(rangeHighLine, rangeLowLine, rangeBgColor)
+
+// delta = na(upVolume) ? float(na) : upVolume + downVolume
+// plot(upVolume, "Up Volume", style = plot.style_columns, color=color.new(COLOR_GREEN, 60))
+// plot(downVolume, "Down Volume", style = plot.style_columns, color=color.new(COLOR_RED, 60))
+// plotchar(delta, "delta", "—", location.absolute, color = delta > 0 ? COLOR_GREEN : COLOR_RED, size = size.tiny)
+
+if not array.includes(availableEtfs, etf)
+    PrivateTable.debug("Select one of the SPDR sector ETFs (XLE, XLF, etc) to see market internals...", position=position.bottom_center)
